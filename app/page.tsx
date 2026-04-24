@@ -8,7 +8,7 @@ export default async function RootPage() {
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect("/recipes");
+    redirect("/zestil");
   } else {
     redirect("/login");
   }

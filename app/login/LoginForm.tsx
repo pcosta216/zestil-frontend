@@ -26,7 +26,7 @@ export default function LoginForm() {
       setError(error.message);
       setLoading(false);
     } else {
-      router.replace("/recipes");
+      router.replace("/zestil");
       router.refresh();
     }
   }

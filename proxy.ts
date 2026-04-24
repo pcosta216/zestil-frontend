@@ -31,17 +31,17 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  if (!user && pathname.startsWith("/recipes")) {
+  if (!user && pathname.startsWith("/zestil")) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
   if (user && pathname === "/login") {
-    return NextResponse.redirect(new URL("/recipes", request.url));
+    return NextResponse.redirect(new URL("/zestil", request.url));
   }
 
   return supabaseResponse;
 }
 
 export const config = {
-  matcher: ["/", "/login", "/recipes/:path*"],
+  matcher: ["/", "/login", "/zestil/:path*"],
 };

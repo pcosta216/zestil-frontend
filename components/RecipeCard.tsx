@@ -4,9 +4,8 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { Utensils } from "@/lib/icons";
+import { ImageOff } from "@/lib/icons";
 import type { RecipeCollection } from "@/lib/supabase/queries";
-import { CircleOff } from 'lucide-react';
 
 function isValidUrl(url: string): boolean {
   try {
@@ -19,14 +18,10 @@ function isValidUrl(url: string): boolean {
 
 interface Props {
   recipe: RecipeCollection;
-  placeholderUrl?: string | null;
 }
 
-export function RecipeCard({ recipe, placeholderUrl }: Props) {
-  const initial =
-    recipe.image_url && isValidUrl(recipe.image_url)
-      ? recipe.image_url
-      : (placeholderUrl ?? null);
+export function RecipeCard({ recipe }: Props) {
+  const initial = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
 
   const [imageSrc, setImageSrc] = useState<string | null>(initial);
 
@@ -36,7 +31,7 @@ export function RecipeCard({ recipe, placeholderUrl }: Props) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25 }}
     >
-      <Link href={`/recipes/${recipe.recipe_uuid}`}>
+      <Link href={`/zestil/${recipe.recipe_uuid}`}>
         <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden hover:border-green-border transition-colors cursor-pointer group h-48">
           {/* Photo */}
           <div className="w-full h-28 bg-green-light flex items-center justify-center overflow-hidden">
@@ -49,15 +44,11 @@ export function RecipeCard({ recipe, placeholderUrl }: Props) {
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                 unoptimized
                 onError={() => {
-                  if (imageSrc !== placeholderUrl && placeholderUrl) {
-                    setImageSrc(placeholderUrl);
-                  } else {
-                    setImageSrc(null);
-                  }
+                  setImageSrc(null);
                 }}
               />
             ) : (
-              <CircleOff size={20} strokeWidth={1.8} className="text-text-muted" aria-hidden="true" />
+              <ImageOff size={40} strokeWidth={1.0} className="text-text-muted" aria-hidden="true" />
             )}
           </div>
 
