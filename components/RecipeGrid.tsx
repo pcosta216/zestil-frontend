@@ -1,6 +1,6 @@
 import { RecipeCard } from "./RecipeCard";
+import { RecipeCardEmpty } from "./RecipeCardEmpty";
 import type { RecipeCollection } from "@/lib/supabase/queries";
-import Link from "next/link";
 
 export function RecipeGrid({ recipes }: { recipes: RecipeCollection[] }) {
   if (recipes.length === 0) {
@@ -20,6 +20,7 @@ export function RecipeGrid({ recipes }: { recipes: RecipeCollection[] }) {
       {recipes.map((r) => (
         <RecipeCard key={r.recipe_uuid} recipe={r} />
       ))}
+      <RecipeCardEmpty />
     </div>
   );
 }
