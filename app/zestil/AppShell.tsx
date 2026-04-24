@@ -11,10 +11,9 @@ type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
 interface Props {
   user: { id: string; email: string; initials: string };
   initialRecipes: RecipeCollection[];
-  placeholderUrl?: string | null;
 }
 
-export function AppShell({ user, initialRecipes, placeholderUrl }: Props) {
+export function AppShell({ user, initialRecipes }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("plan");
 
   return (
@@ -38,7 +37,7 @@ export function AppShell({ user, initialRecipes, placeholderUrl }: Props) {
 
       <div className="flex-1 min-h-0 flex flex-col">
         {activeTab === "plan" && <PlanTab />}
-        {activeTab === "saved" && <SavedTab recipes={initialRecipes} placeholderUrl={placeholderUrl} />}
+        {activeTab === "saved" && <SavedTab recipes={initialRecipes} />}
         {(activeTab === "explore" ||
           activeTab === "groceries" ||
           activeTab === "profile") && (
