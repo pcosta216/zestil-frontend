@@ -2,7 +2,12 @@ import { RecipeCard } from "./RecipeCard";
 import { RecipeCardEmpty } from "./RecipeCardEmpty";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 
-export function RecipeGrid({ recipes }: { recipes: RecipeCollection[] }) {
+interface Props {
+  recipes: RecipeCollection[];
+  placeholderUrl?: string | null;
+}
+
+export function RecipeGrid({ recipes, placeholderUrl }: Props) {
   if (recipes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
@@ -18,7 +23,7 @@ export function RecipeGrid({ recipes }: { recipes: RecipeCollection[] }) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {recipes.map((r) => (
-        <RecipeCard key={r.recipe_uuid} recipe={r} />
+        <RecipeCard key={r.recipe_uuid} recipe={r} placeholderUrl={placeholderUrl} />
       ))}
       <RecipeCardEmpty />
     </div>

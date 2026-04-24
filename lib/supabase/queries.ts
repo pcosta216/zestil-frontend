@@ -38,6 +38,21 @@ export async function getRecipes(userId: string): Promise<RecipeCollection[]> {
   });
 }
 
+export async function getImagePlaceholder(): Promise<string | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("tbl_app_config")
+    .select("config")
+    .eq("description", "image_placeholder")
+    .limit(1)
+    .single();
+
+  if (!data?.config) return null;
+  const config =
+    typeof data.config === "string" ? JSON.parse(data.config) : data.config;
+  return config?.url ?? null;
+}
+
 export async function getRecipe(
   recipeUuid: string,
   userId: string
