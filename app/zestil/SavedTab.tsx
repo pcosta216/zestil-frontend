@@ -63,7 +63,7 @@ export function SavedTab({ recipes }: Props) {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col relative">
+    <div className="flex-1 min-h-0 flex flex-col relative overflow-hidden">
       {/* Scroll area */}
       <div
         ref={scrollRef}
@@ -75,7 +75,7 @@ export function SavedTab({ recipes }: Props) {
             onClick={() => setPanelOpen((o) => !o)}
             aria-label="Filter by collection"
             className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-              panelOpen || selected
+              panelOpen
                 ? "bg-green-primary text-white"
                 : "bg-green-light text-green-primary hover:bg-green-border"
             }`}
