@@ -26,7 +26,7 @@ export async function getRecipes(userId: string): Promise<RecipeCollection[]> {
     .from("viw_user_collection_set")
     .select("*")
     .eq("account_key", userId)
-    .order("id", { ascending: false });
+    .order("meal_title", { ascending: true });
 
   if (error) throw error;
   const rows = data ?? [];
