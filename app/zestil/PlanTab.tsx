@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
+import { createClient } from "@/lib/supabase/browser";
 
 interface MealCard {
   day: string;
@@ -15,7 +16,10 @@ type AgentMessage = {
   reasoning?: string;
   mealCards?: MealCard[];
   extraContent?: string;
+  isStreaming?: boolean;
 };
+
+type HistoryEntry = { role: "user" | "agent"; content: string };
 
 type UserMessage = {
   id: string;
@@ -162,8 +166,11 @@ export function PlanTab() {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [input, setInput] = useState("");
+  const [quickReplies, setQuickReplies] = useState(QUICK_REPLIES);
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const apiHistory = useRef<HistoryEntry[]>([]);
+  const sessionId = useRef(crypto.randomUUID());
 
   useEffect(() => {
     if (chatRef.current) {
@@ -171,29 +178,115 @@ export function PlanTab() {
     }
   }, [messages, isTyping]);
 
-  function sendMessage(text: string) {
+  const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
-    setMessages((prev) => [
-      ...prev,
-      { id: Date.now().toString(), type: "user", content: text },
-    ]);
+
+    const userMsg: Message = { id: Date.now().toString(), type: "user", content: text };
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-    }
+    if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsTyping(true);
-    setTimeout(() => {
-      setIsTyping(false);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
-          type: "agent",
-          content: "Got it! Let me put that together for you right away.",
+
+    const historySnapshot = [...apiHistory.current];
+    apiHistory.current.push({ role: "user", content: text });
+
+    const agentId = `agent-${Date.now()}`;
+    const emptyAgent: AgentMessage = { id: agentId, type: "agent", content: "", isStreaming: true };
+
+    // Get Supabase session token
+    let token = "";
+    try {
+      const supabase = createClient();
+      const { data } = await supabase.auth.getSession();
+      token = data.session?.access_token ?? "";
+    } catch { /* proceed without token */ }
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-      ]);
-    }, 1300);
-  }
+        body: JSON.stringify({
+          message: text,
+          session_id: sessionId.current,
+          history: historySnapshot,
+        }),
+      });
+
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+
+      setIsTyping(false);
+      setMessages((prev) => [...prev, emptyAgent]);
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      let finalContent = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const parts = buf.split("\n\n");
+        buf = parts.pop() ?? "";
+
+        for (const part of parts) {
+          const lines = part.split("\n");
+          const eventLine = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
+          const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
+          if (!eventLine || !dataLine) continue;
+
+          try {
+            const payload = JSON.parse(dataLine);
+
+            if (eventLine === "reasoning") {
+              setMessages((prev) => prev.map((m) =>
+                m.id === agentId
+                  ? { ...m, reasoning: ((m as AgentMessage).reasoning ?? "") + payload.text }
+                  : m
+              ));
+            } else if (eventLine === "content") {
+              finalContent += payload.text;
+              setMessages((prev) => prev.map((m) =>
+                m.id === agentId ? { ...m, content: (m as AgentMessage).content + payload.text } : m
+              ));
+            } else if (eventLine === "meal_cards") {
+              setMessages((prev) => prev.map((m) =>
+                m.id === agentId ? { ...m, mealCards: payload } : m
+              ));
+            } else if (eventLine === "quick_replies") {
+              setQuickReplies(payload);
+            } else if (eventLine === "done") {
+              setMessages((prev) => prev.map((m) =>
+                m.id === agentId ? { ...m, isStreaming: false } : m
+              ));
+              apiHistory.current.push({ role: "agent", content: finalContent });
+            } else if (eventLine === "error") {
+              throw new Error(payload.message ?? "Agent error");
+            }
+          } catch { /* skip malformed event */ }
+        }
+      }
+    } catch (err) {
+      console.error("Chat error:", err);
+      setIsTyping(false);
+      setMessages((prev) => {
+        const hasAgent = prev.some((m) => m.id === agentId);
+        const errMsg: AgentMessage = {
+          id: agentId,
+          type: "agent",
+          content: "Something went wrong. Please try again.",
+          isStreaming: false,
+        };
+        return hasAgent
+          ? prev.map((m) => m.id === agentId ? errMsg : m)
+          : [...prev, errMsg];
+      });
+    }
+  }, [isTyping]);
 
   return (
     <>
@@ -228,6 +321,9 @@ export function PlanTab() {
                   style={{ borderRadius: "4px 16px 16px 16px" }}
                 >
                   {msg.content}
+                  {msg.isStreaming && (
+                    <span className="inline-block w-0.5 h-3.5 bg-green-primary ml-0.5 align-middle animate-pulse" />
+                  )}
                 </div>
                 {msg.mealCards && <MealCardGrid cards={msg.mealCards} />}
                 {msg.extraContent && (
@@ -247,7 +343,7 @@ export function PlanTab() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar px-5 py-2 flex-shrink-0">
-        {QUICK_REPLIES.map((qr) => (
+        {quickReplies.map((qr) => (
           <button
             key={qr}
             onClick={() => sendMessage(qr)}
