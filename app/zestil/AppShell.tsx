@@ -36,16 +36,16 @@ export function AppShell({ user, initialRecipes }: Props) {
       </header>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        {activeTab === "plan" && <PlanTab />}
-        {activeTab === "saved" && <SavedTab recipes={initialRecipes} />}
-        {(activeTab === "explore" ||
-          activeTab === "groceries" ||
-          activeTab === "profile") && (
-          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-text-muted">
-            <span className="text-3xl">🌱</span>
-            <p className="text-sm">Coming soon</p>
-          </div>
-        )}
+        <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+          <PlanTab />
+        </div>
+        <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+          <SavedTab recipes={initialRecipes} />
+        </div>
+        <div className={["explore", "groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
+          <span className="text-3xl">🌱</span>
+          <p className="text-sm">Coming soon</p>
+        </div>
       </div>
 
       <nav className="flex bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">

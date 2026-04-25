@@ -77,6 +77,26 @@ const QUICK_REPLIES = [
   "Vegetarian options",
 ];
 
+function extractQuickReplies(text: string): { content: string; replies: string[] | null } {
+  const match = text.match(/<quick_replies>([\s\S]*?)<\/quick_replies>/);
+  if (!match) return { content: text, replies: null };
+  try {
+    const replies = JSON.parse(match[1]);
+    const content = text.replace(/<quick_replies>[\s\S]*?<\/quick_replies>/, "").trim();
+    return { content, replies: Array.isArray(replies) ? replies : null };
+  } catch {
+    return { content: text, replies: null };
+  }
+}
+
+function stripPartialQuickReplies(text: string): string {
+  // remove complete tags and any partial opening tag still streaming in
+  return text
+    .replace(/<quick_replies>[\s\S]*?<\/quick_replies>/g, "")
+    .replace(/<quick_replies>[\s\S]*$/, "")
+    .trim();
+}
+
 function parseMarkdown(text: string): string {
   if (!text) return '';
   const escaped = text
@@ -238,50 +258,75 @@ export function PlanTab() {
       let buf = "";
       let finalContent = "";
 
+      const processEvent = (part: string) => {
+        const lines = part.split("\n");
+        const eventLine = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
+        const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
+        if (!eventLine || !dataLine) return;
+
+        try {
+          const payload = JSON.parse(dataLine);
+
+          if (eventLine === "reasoning") {
+            setMessages((prev) => prev.map((m) =>
+              m.id === agentId
+                ? { ...m, reasoning: ((m as AgentMessage).reasoning ?? "") + payload.text }
+                : m
+            ));
+          } else if (eventLine === "content") {
+            finalContent += payload.text;
+            setMessages((prev) => prev.map((m) =>
+              m.id === agentId ? { ...m, content: (m as AgentMessage).content + payload.text } : m
+            ));
+          } else if (eventLine === "meal_cards") {
+            setMessages((prev) => prev.map((m) =>
+              m.id === agentId ? { ...m, mealCards: payload } : m
+            ));
+          } else if (eventLine === "extra_content") {
+            setMessages((prev) => prev.map((m) =>
+              m.id === agentId ? { ...m, extraContent: payload.text } : m
+            ));
+          } else if (eventLine === "quick_replies") {
+            const replies = Array.isArray(payload) ? payload : (payload.quick_replies ?? []);
+            if (replies.length) setQuickReplies(replies);
+          } else if (eventLine === "done") {
+            if (payload.quick_replies?.length) setQuickReplies(payload.quick_replies);
+            if (payload.meal_cards)            setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, mealCards: payload.meal_cards } : m));
+            if (payload.extra_content)         setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, extraContent: payload.extra_content } : m));
+            if (payload.content && !finalContent) {
+              finalContent = payload.content;
+            }
+            // extract <quick_replies> tags embedded in the streamed content
+            const { content: cleanContent, replies } = extractQuickReplies(finalContent);
+            if (replies?.length) setQuickReplies(replies);
+            if (cleanContent !== finalContent) {
+              finalContent = cleanContent;
+              setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, content: cleanContent } : m));
+            }
+            setMessages((prev) => prev.map((m) =>
+              m.id === agentId ? { ...m, isStreaming: false } : m
+            ));
+            apiHistory.current.push({ role: "agent", content: finalContent });
+          } else if (eventLine === "error") {
+            throw new Error(payload.message ?? "Agent error");
+          }
+        } catch (e) {
+          if (eventLine === "error") throw e;
+        }
+      };
+
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+          // flush any event that arrived without a trailing \n\n
+          if (buf.trim()) processEvent(buf);
+          break;
+        }
         buf += decoder.decode(value, { stream: true });
 
         const parts = buf.split("\n\n");
         buf = parts.pop() ?? "";
-
-        for (const part of parts) {
-          const lines = part.split("\n");
-          const eventLine = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
-          const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
-          if (!eventLine || !dataLine) continue;
-
-          try {
-            const payload = JSON.parse(dataLine);
-
-            if (eventLine === "reasoning") {
-              setMessages((prev) => prev.map((m) =>
-                m.id === agentId
-                  ? { ...m, reasoning: ((m as AgentMessage).reasoning ?? "") + payload.text }
-                  : m
-              ));
-            } else if (eventLine === "content") {
-              finalContent += payload.text;
-              setMessages((prev) => prev.map((m) =>
-                m.id === agentId ? { ...m, content: (m as AgentMessage).content + payload.text } : m
-              ));
-            } else if (eventLine === "meal_cards") {
-              setMessages((prev) => prev.map((m) =>
-                m.id === agentId ? { ...m, mealCards: payload } : m
-              ));
-            } else if (eventLine === "quick_replies") {
-              setQuickReplies(payload);
-            } else if (eventLine === "done") {
-              setMessages((prev) => prev.map((m) =>
-                m.id === agentId ? { ...m, isStreaming: false } : m
-              ));
-              apiHistory.current.push({ role: "agent", content: finalContent });
-            } else if (eventLine === "error") {
-              throw new Error(payload.message ?? "Agent error");
-            }
-          } catch { /* skip malformed event */ }
-        }
+        for (const part of parts) processEvent(part);
       }
     } catch (err) {
       console.error("Chat error:", err);
@@ -333,7 +378,7 @@ export function PlanTab() {
                   className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
                   style={{ borderRadius: "4px 16px 16px 16px" }}
                 >
-                  <span dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }} />
+                  <span dangerouslySetInnerHTML={{ __html: parseMarkdown(stripPartialQuickReplies(msg.content)) }} />
                   {msg.isStreaming && (
                     <span className="inline-block w-0.5 h-3.5 bg-green-primary ml-0.5 align-middle animate-pulse" />
                   )}
