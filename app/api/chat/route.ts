@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
 const FLASK_API_URL = process.env.FLASK_API_URL ?? "http://localhost:5001";
+console.log("[chat] FLASK_API_URL =", FLASK_API_URL);
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

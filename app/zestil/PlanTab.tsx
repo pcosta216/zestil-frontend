@@ -77,6 +77,19 @@ const QUICK_REPLIES = [
   "Vegetarian options",
 ];
 
+function parseMarkdown(text: string): string {
+  if (!text) return '';
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+  return escaped
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\n/g, '<br>');
+}
+
 function AgentIcon() {
   return (
     <div className="w-7 h-7 rounded-full bg-green-light border border-green-border flex items-center justify-center flex-shrink-0 mt-0.5">
@@ -320,7 +333,7 @@ export function PlanTab() {
                   className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
                   style={{ borderRadius: "4px 16px 16px 16px" }}
                 >
-                  {msg.content}
+                  <span dangerouslySetInnerHTML={{ __html: parseMarkdown(msg.content) }} />
                   {msg.isStreaming && (
                     <span className="inline-block w-0.5 h-3.5 bg-green-primary ml-0.5 align-middle animate-pulse" />
                   )}
