@@ -24,14 +24,14 @@ export function SavedTab({ recipes }: Props) {
       .sort((a, b) => a.localeCompare(b));
   }, [recipes]);
 
-  const displayed = recipes.filter((r) => {
+  const displayed = useMemo(() => recipes.filter((r) => {
     if (selected && r.collections_short_desc !== selected) return false;
     if (query.trim()) {
       const q = query.toLowerCase();
       return r.meal_title?.toLowerCase().includes(q) ?? false;
     }
     return true;
-  });
+  }), [recipes, selected, query]);
 
   const updateThumb = useCallback(() => {
     const el = scrollRef.current;
@@ -113,14 +113,17 @@ export function SavedTab({ recipes }: Props) {
 
       {/* Search bar */}
       <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
-        <Search size={16} strokeWidth={1.8} className="text-[#B4B2A9] flex-shrink-0" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search recipes…"
-          className="flex-1 bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] px-4 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none leading-relaxed focus:border-green-mid transition-colors"
-        />
+        <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
+        <div className="flex-1 relative">
+          <Search size={14} strokeWidth={1.8} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B4B2A9] pointer-events-none" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search recipes…"
+            className="w-full bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] pl-9 pr-4 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none leading-relaxed focus:border-green-mid transition-colors"
+          />
+        </div>
         {query && (
           <button
             onClick={() => setQuery("")}
