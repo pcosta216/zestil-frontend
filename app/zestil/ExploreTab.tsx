@@ -406,7 +406,7 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                 sendMessage(input);
               }
             }}
-            placeholder="Ask anything about your meals…"
+            placeholder="Explore meal options wiht AI…"
             rows={1}
             className="flex-1 bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] pl-4 pr-11 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none resize-none leading-relaxed overflow-y-auto focus:border-green-mid transition-colors"
             style={{ maxHeight: "90px" }}
