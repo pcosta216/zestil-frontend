@@ -3,5 +3,8 @@ import { CircleOff } from 'lucide-react';
 import { ImageOff } from 'lucide-react';
 import { BookOpenText } from 'lucide-react';
 import { Search } from 'lucide-react';
+import { CirclePlus } from 'lucide-react';
+import { Info } from 'lucide-react';
+import { Plus } from 'lucide-react';
 
-export { Utensils, CircleOff, ImageOff, BookOpenText, Search };
+export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus };

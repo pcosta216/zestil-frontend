@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { Plus } from "@/lib/icons";
 
 interface MealCard {
   day: string;
@@ -17,6 +18,7 @@ type AgentMessage = {
   reasoning?: string;
   mealCards?: MealCard[];
   extraContent?: string;
+  responseType?: string;
 };
 
 type HistoryEntry = { role: "user" | "agent"; content: string };
@@ -209,13 +211,14 @@ export function ExploreTab() {
 
       const data = await res.json();
       console.log("[LLM response]", data);
-      const { response, meal_cards, quick_replies } = data;
+      const { response, meal_cards, quick_replies, response_type } = data;
 
       const agentMsg: AgentMessage = {
-        id:        `agent-${Date.now()}`,
-        type:      "agent",
-        content:   response?.trim() || "Sorry, I couldn't generate a response.",
-        mealCards: meal_cards?.length ? meal_cards : undefined,
+        id:           `agent-${Date.now()}`,
+        type:         "agent",
+        content:      response?.trim() || "Sorry, I couldn't generate a response.",
+        mealCards:    meal_cards?.length ? meal_cards : undefined,
+        responseType: response_type,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -265,13 +268,20 @@ export function ExploreTab() {
               <AgentIcon />
               <div className="flex flex-col gap-1.5 min-w-0">
                 {msg.reasoning && <ReasoningPill reasoning={msg.reasoning} />}
-                <div
-                  className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
-                  style={{ borderRadius: "4px 16px 16px 16px" }}
-                >
-                  <div className="chat-markdown">
-                    <Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown>
+                <div className="relative">
+                  <div
+                    className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
+                    style={{ borderRadius: "4px 16px 16px 16px" }}
+                  >
+                    <div className="chat-markdown">
+                      <Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown>
+                    </div>
                   </div>
+                  {msg.responseType === "recipe" && (
+                    <button className="absolute -bottom-3 -right-3 w-8 h-8 bg-green-primary hover:bg-green-dark text-white rounded-full flex items-center justify-center shadow-sm transition-colors outline-none">
+                      <Plus size={36} strokeWidth={2.5} />
+                    </button>
+                  )}
                 </div>
                 {msg.mealCards && <MealCardGrid cards={msg.mealCards} />}
                 {msg.extraContent && (
