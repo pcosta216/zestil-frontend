@@ -6,5 +6,6 @@ import { Search } from 'lucide-react';
 import { CirclePlus } from 'lucide-react';
 import { Info } from 'lucide-react';
 import { Plus } from 'lucide-react';
+import { Heart } from 'lucide-react';
 
-export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus };
+export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus, Heart };

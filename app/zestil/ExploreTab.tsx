@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { Heart } from "@/lib/icons";
 
 interface MealCard {
   day: string;
@@ -171,6 +172,7 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
   const [quickReplies, setQuickReplies] = useState(QUICK_REPLIES);
   const [pickerMsgId, setPickerMsgId] = useState<string | null>(null);
   const [checked, setChecked] = useState<Set<string>>(new Set());
+  const [hearted, setHearted] = useState<Set<string>>(new Set());
   const chatRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const apiHistory = useRef<HistoryEntry[]>([]);
@@ -281,15 +283,27 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                   {msg.responseType === "recipe" && (
                     <div className="flex items-center justify-between gap-2 mt-1.5">
                       {/* Left — Add to Saved with collection picker */}
+                      {pickerMsgId === msg.id && (
+                        <div className="fixed inset-0 z-[9]" onClick={() => setPickerMsgId(null)} />
+                      )}
                       <div className="relative">
                         <button
                           onClick={() => {
+                            setHearted((prev) => {
+                              const next = new Set(prev);
+                              next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id);
+                              return next;
+                            });
                             setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
                             setChecked(new Set());
                           }}
-                          className="text-[11px] font-medium text-green-primary bg-white border border-green-border rounded-full px-3 py-1 hover:bg-green-light transition-colors outline-none"
+                          className="transition-colors outline-none"
                         >
-                          + Add to Saved
+                          <Heart
+                            size={18}
+                            strokeWidth={1.5}
+                            className={hearted.has(msg.id) ? "text-green-primary fill-green-primary" : "text-green-primary"}
+                          />
                         </button>
                         {pickerMsgId === msg.id && (
                           <div className="absolute bottom-full mb-1.5 left-0 bg-white/50 backdrop-blur-sm border border-[rgba(0,0,0,0.07)] rounded-2xl shadow-xl w-48 z-10 flex flex-col max-h-[60vh]">
@@ -330,7 +344,7 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                       </div>
                       {/* Right — meal type quick-add buttons */}
                       <div className="flex items-center gap-1.5">
-                        {["Add to Dinner", "Add to Lunch", "Add as a Snack"].map((label) => (
+                        {["+ Dinner", "+ Lunch", "+ Snack"].map((label) => (
                           <button
                             key={label}
                             className="text-[11px] font-medium text-text-muted bg-white border border-[rgba(0,0,0,0.08)] rounded-full px-2.5 py-1 hover:text-green-primary hover:border-green-border transition-colors outline-none whitespace-nowrap"
