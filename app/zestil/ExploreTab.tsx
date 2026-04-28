@@ -279,52 +279,66 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                     </div>
                   </div>
                   {msg.responseType === "recipe" && (
-                    <div className="relative inline-block">
-                      <button
-                        onClick={() => {
-                          setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
-                          setChecked(new Set());
-                        }}
-                        className="text-[11px] font-medium text-green-primary bg-white border border-green-border rounded-full px-3 py-1 shadow-sm hover:bg-green-light transition-colors outline-none"
-                      >
-                        + Add to Saved
-                      </button>
-                      {pickerMsgId === msg.id && (
-                        <div className="absolute bottom-full mb-1.5 left-0 bg-white border border-[rgba(0,0,0,0.08)] rounded-2xl shadow-md w-48 z-10 flex flex-col max-h-[60vh]">
-                          <div className="px-3 py-2 border-b border-[rgba(0,0,0,0.06)] flex-shrink-0">
-                            <span className="text-[11px] font-medium text-text-muted uppercase tracking-wide">Collections</span>
+                    <div className="flex items-center justify-between gap-2 mt-1.5">
+                      {/* Left — Add to Saved with collection picker */}
+                      <div className="relative">
+                        <button
+                          onClick={() => {
+                            setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
+                            setChecked(new Set());
+                          }}
+                          className="text-[11px] font-medium text-green-primary bg-white border border-green-border rounded-full px-3 py-1 hover:bg-green-light transition-colors outline-none"
+                        >
+                          + Add to Saved
+                        </button>
+                        {pickerMsgId === msg.id && (
+                          <div className="absolute bottom-full mb-1.5 left-0 bg-white/50 backdrop-blur-sm border border-[rgba(0,0,0,0.07)] rounded-2xl shadow-xl w-48 z-10 flex flex-col max-h-[60vh]">
+                            <div className="px-3 py-2 border-b border-[rgba(0,0,0,0.06)] flex-shrink-0">
+                              <span className="text-[11px] font-medium text-text-muted uppercase tracking-wide">Collections</span>
+                            </div>
+                            <div className="flex-1 overflow-y-auto py-1">
+                              {collections.length === 0 ? (
+                                <p className="text-[12px] text-text-muted px-3 py-2">No collections yet</p>
+                              ) : (
+                                collections.map((name) => (
+                                  <label key={name} className="flex items-center gap-2.5 px-3 py-2 hover:bg-warm cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={checked.has(name)}
+                                      onChange={() => setChecked((prev) => {
+                                        const next = new Set(prev);
+                                        next.has(name) ? next.delete(name) : next.add(name);
+                                        return next;
+                                      })}
+                                      className="accent-green-primary w-3.5 h-3.5"
+                                    />
+                                    <span className="text-[12px] text-text-main">{name}</span>
+                                  </label>
+                                ))
+                              )}
+                            </div>
+                            <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
+                              <button
+                                onClick={() => setPickerMsgId(null)}
+                                className="w-full text-[11px] font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-1.5 transition-colors outline-none"
+                              >
+                                Save
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex-1 overflow-y-auto py-1">
-                            {collections.length === 0 ? (
-                              <p className="text-[12px] text-text-muted px-3 py-2">No collections yet</p>
-                            ) : (
-                              collections.map((name) => (
-                                <label key={name} className="flex items-center gap-2.5 px-3 py-2 hover:bg-warm cursor-pointer">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked.has(name)}
-                                    onChange={() => setChecked((prev) => {
-                                      const next = new Set(prev);
-                                      next.has(name) ? next.delete(name) : next.add(name);
-                                      return next;
-                                    })}
-                                    className="accent-green-primary w-3.5 h-3.5"
-                                  />
-                                  <span className="text-[12px] text-text-main">{name}</span>
-                                </label>
-                              ))
-                            )}
-                          </div>
-                          <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
-                            <button
-                              onClick={() => setPickerMsgId(null)}
-                              className="w-full text-[11px] font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-1.5 transition-colors outline-none"
-                            >
-                              Save
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      {/* Right — meal type quick-add buttons */}
+                      <div className="flex items-center gap-1.5">
+                        {["Add to Dinner", "Add to Lunch", "Add as a Snack"].map((label) => (
+                          <button
+                            key={label}
+                            className="text-[11px] font-medium text-text-muted bg-white border border-[rgba(0,0,0,0.08)] rounded-full px-2.5 py-1 hover:text-green-primary hover:border-green-border transition-colors outline-none whitespace-nowrap"
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
