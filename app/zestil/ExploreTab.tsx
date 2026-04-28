@@ -284,7 +284,10 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                     <div className="flex items-center justify-between gap-2 mt-1.5">
                       {/* Left — Add to Saved with collection picker */}
                       {pickerMsgId === msg.id && (
-                        <div className="fixed inset-0 z-[9]" onClick={() => setPickerMsgId(null)} />
+                        <div className="fixed inset-0 z-[9]" onClick={() => {
+                          setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                          setPickerMsgId(null);
+                        }} />
                       )}
                       <div className="relative">
                         <button
