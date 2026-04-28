@@ -1,50 +1,47 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const FLASK_API_URL = process.env.FLASK_API_URL ?? "http://localhost:5001";
+const CHAT_FUNCTION_URL =
+  process.env.CHAT_FUNCTION_URL ??
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/zestil-chat`;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   if (!user) {
-    return new Response(JSON.stringify({ message: "Unauthorized" }), {
-      status: 401,
-      headers: { "Content-Type": "application/json" },
-    });
+    return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.text();
+  const body = await req.json().catch(() => ({}));
 
-  let upstream: Response;
+  let data: Response;
   try {
-    upstream = await fetch(`${FLASK_API_URL}/api/v1/chat`, {
+    data = await fetch(CHAT_FUNCTION_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-User-Id": user.id,
+        Authorization: `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
       },
-      body,
+      body: JSON.stringify({
+        ...body,
+        user_id: user.id,
+      }),
     });
   } catch {
-    return new Response(
-      `event: error\ndata: ${JSON.stringify({ message: "Could not reach agent backend" })}\n\n`,
-      { status: 502, headers: { "Content-Type": "text/event-stream" } }
+    return NextResponse.json(
+      { error: "Could not reach chat agent" },
+      { status: 502 }
     );
   }
 
-  if (!upstream.ok || !upstream.body) {
-    const text = await upstream.text().catch(() => "");
-    return new Response(
-      `event: error\ndata: ${JSON.stringify({ message: text || "Agent error" })}\n\n`,
-      { status: upstream.status, headers: { "Content-Type": "text/event-stream" } }
-    );
+  const result = await data.json();
+
+  if (!data.ok) {
+    return NextResponse.json(result, { status: data.status });
   }
 
-  return new Response(upstream.body, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  return NextResponse.json(result);
 }

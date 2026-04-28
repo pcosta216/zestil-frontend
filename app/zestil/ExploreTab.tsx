@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import Markdown from "react-markdown";
+import remarkBreaks from "remark-breaks";
 
 interface MealCard {
   day: string;
@@ -16,7 +17,6 @@ type AgentMessage = {
   reasoning?: string;
   mealCards?: MealCard[];
   extraContent?: string;
-  isStreaming?: boolean;
 };
 
 type HistoryEntry = { role: "user" | "agent"; content: string };
@@ -77,38 +77,6 @@ const QUICK_REPLIES = [
   "Vegetarian options",
 ];
 
-function extractQuickReplies(text: string): { content: string; replies: string[] | null } {
-  const match = text.match(/<quick_replies>([\s\S]*?)<\/quick_replies>/);
-  if (!match) return { content: text, replies: null };
-  try {
-    const replies = JSON.parse(match[1]);
-    const content = text.replace(/<quick_replies>[\s\S]*?<\/quick_replies>/, "").trim();
-    return { content, replies: Array.isArray(replies) ? replies : null };
-  } catch {
-    return { content: text, replies: null };
-  }
-}
-
-function stripPartialQuickReplies(text: string): string {
-  // remove complete tags and any partial opening tag still streaming in
-  return text
-    .replace(/<quick_replies>[\s\S]*?<\/quick_replies>/g, "")
-    .replace(/<quick_replies>[\s\S]*$/, "")
-    .trim();
-}
-
-function parseMarkdown(text: string): string {
-  if (!text) return '';
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
-  return escaped
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+?)\*/g, '<em>$1</em>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n/g, '<br>');
-}
 
 function AgentIcon() {
   return (
@@ -195,7 +163,7 @@ function TypingIndicator() {
   );
 }
 
-export function PlanTab() {
+export function ExploreTab() {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [input, setInput] = useState("");
@@ -223,24 +191,10 @@ export function PlanTab() {
     const historySnapshot = [...apiHistory.current];
     apiHistory.current.push({ role: "user", content: text });
 
-    const agentId = `agent-${Date.now()}`;
-    const emptyAgent: AgentMessage = { id: agentId, type: "agent", content: "", isStreaming: true };
-
-    // Get Supabase session token
-    let token = "";
-    try {
-      const supabase = createClient();
-      const { data } = await supabase.auth.getSession();
-      token = data.session?.access_token ?? "";
-    } catch { /* proceed without token */ }
-
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
           session_id: sessionId.current,
@@ -248,101 +202,38 @@ export function PlanTab() {
         }),
       });
 
-      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.error ?? `HTTP ${res.status}`);
+      }
 
-      setIsTyping(false);
-      setMessages((prev) => [...prev, emptyAgent]);
+      const data = await res.json();
+      console.log("[LLM response]", data);
+      const { response, meal_cards, quick_replies } = data;
 
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buf = "";
-      let finalContent = "";
-
-      const processEvent = (part: string) => {
-        const lines = part.split("\n");
-        const eventLine = lines.find((l) => l.startsWith("event:"))?.slice(6).trim();
-        const dataLine = lines.find((l) => l.startsWith("data:"))?.slice(5).trim();
-        if (!eventLine || !dataLine) return;
-
-        try {
-          const payload = JSON.parse(dataLine);
-
-          if (eventLine === "reasoning") {
-            setMessages((prev) => prev.map((m) =>
-              m.id === agentId
-                ? { ...m, reasoning: ((m as AgentMessage).reasoning ?? "") + payload.text }
-                : m
-            ));
-          } else if (eventLine === "content") {
-            finalContent += payload.text;
-            setMessages((prev) => prev.map((m) =>
-              m.id === agentId ? { ...m, content: (m as AgentMessage).content + payload.text } : m
-            ));
-          } else if (eventLine === "meal_cards") {
-            setMessages((prev) => prev.map((m) =>
-              m.id === agentId ? { ...m, mealCards: payload } : m
-            ));
-          } else if (eventLine === "extra_content") {
-            setMessages((prev) => prev.map((m) =>
-              m.id === agentId ? { ...m, extraContent: payload.text } : m
-            ));
-          } else if (eventLine === "quick_replies") {
-            const replies = Array.isArray(payload) ? payload : (payload.quick_replies ?? []);
-            if (replies.length) setQuickReplies(replies);
-          } else if (eventLine === "done") {
-            if (payload.quick_replies?.length) setQuickReplies(payload.quick_replies);
-            if (payload.meal_cards)            setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, mealCards: payload.meal_cards } : m));
-            if (payload.extra_content)         setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, extraContent: payload.extra_content } : m));
-            if (payload.content && !finalContent) {
-              finalContent = payload.content;
-            }
-            // extract <quick_replies> tags embedded in the streamed content
-            const { content: cleanContent, replies } = extractQuickReplies(finalContent);
-            if (replies?.length) setQuickReplies(replies);
-            if (cleanContent !== finalContent) {
-              finalContent = cleanContent;
-              setMessages((prev) => prev.map((m) => m.id === agentId ? { ...m, content: cleanContent } : m));
-            }
-            setMessages((prev) => prev.map((m) =>
-              m.id === agentId ? { ...m, isStreaming: false } : m
-            ));
-            apiHistory.current.push({ role: "agent", content: finalContent });
-          } else if (eventLine === "error") {
-            throw new Error(payload.message ?? "Agent error");
-          }
-        } catch (e) {
-          if (eventLine === "error") throw e;
-        }
+      const agentMsg: AgentMessage = {
+        id:        `agent-${Date.now()}`,
+        type:      "agent",
+        content:   response?.trim() || "Sorry, I couldn't generate a response.",
+        mealCards: meal_cards?.length ? meal_cards : undefined,
       };
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) {
-          // flush any event that arrived without a trailing \n\n
-          if (buf.trim()) processEvent(buf);
-          break;
-        }
-        buf += decoder.decode(value, { stream: true });
-
-        const parts = buf.split("\n\n");
-        buf = parts.pop() ?? "";
-        for (const part of parts) processEvent(part);
-      }
+      setMessages((prev) => [...prev, agentMsg]);
+      apiHistory.current.push({ role: "agent", content: agentMsg.content });
+      if (quick_replies?.length) setQuickReplies(quick_replies);
     } catch (err) {
-      console.error("Chat error:", err);
+      const msg = err instanceof Error ? err.message : "Something went wrong.";
+      console.error("Chat error:", msg);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id:      `agent-${Date.now()}`,
+          type:    "agent" as const,
+          content: `Error: ${msg}`,
+        },
+      ]);
+    } finally {
       setIsTyping(false);
-      setMessages((prev) => {
-        const hasAgent = prev.some((m) => m.id === agentId);
-        const errMsg: AgentMessage = {
-          id: agentId,
-          type: "agent",
-          content: "Something went wrong. Please try again.",
-          isStreaming: false,
-        };
-        return hasAgent
-          ? prev.map((m) => m.id === agentId ? errMsg : m)
-          : [...prev, errMsg];
-      });
     }
   }, [isTyping]);
 
@@ -378,10 +269,9 @@ export function PlanTab() {
                   className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
                   style={{ borderRadius: "4px 16px 16px 16px" }}
                 >
-                  <span dangerouslySetInnerHTML={{ __html: parseMarkdown(stripPartialQuickReplies(msg.content)) }} />
-                  {msg.isStreaming && (
-                    <span className="inline-block w-0.5 h-3.5 bg-green-primary ml-0.5 align-middle animate-pulse" />
-                  )}
+                  <div className="prose prose-sm max-w-none prose-headings:text-text-main prose-p:text-text-main prose-li:text-text-main prose-strong:text-text-main prose-code:text-text-main prose-hr:border-[rgba(0,0,0,0.1)]">
+                    <Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown>
+                  </div>
                 </div>
                 {msg.mealCards && <MealCardGrid cards={msg.mealCards} />}
                 {msg.extraContent && (
@@ -414,45 +304,47 @@ export function PlanTab() {
 
       <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
         <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-            e.target.style.height = "auto";
-            e.target.style.height =
-              Math.min(e.target.scrollHeight, 90) + "px";
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage(input);
-            }
-          }}
-          placeholder="Ask anything about your meals…"
-          rows={1}
-          className="flex-1 bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] px-4 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none resize-none leading-relaxed overflow-y-auto focus:border-green-mid transition-colors"
-          style={{ maxHeight: "90px" }}
-        />
-        <button
-          onClick={() => sendMessage(input)}
-          disabled={!input.trim() || isTyping}
-          className="w-[34px] h-[34px] rounded-full bg-green-primary border-none flex items-center justify-center cursor-pointer flex-shrink-0 disabled:opacity-40 hover:bg-green-dark transition-colors"
-        >
-          <svg
-            width="13"
-            height="13"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="white"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
+        <div className="flex-1 flex items-center">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+              e.target.style.height = "auto";
+              e.target.style.height =
+                Math.min(e.target.scrollHeight, 90) + "px";
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage(input);
+              }
+            }}
+            placeholder="Ask anything about your meals…"
+            rows={1}
+            className="flex-1 bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] pl-4 pr-11 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none resize-none leading-relaxed overflow-y-auto focus:border-green-mid transition-colors"
+            style={{ maxHeight: "90px" }}
+          />
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={!input.trim() || isTyping}
+            className="-ml-9 z-10 flex-shrink-0 w-[30px] h-[30px] rounded-full bg-green-primary border-none flex items-center justify-center cursor-pointer disabled:opacity-40 hover:bg-green-dark transition-colors"
           >
-            <line x1="22" y1="2" x2="11" y2="13" />
-            <polygon points="22 2 15 22 11 13 2 9 22 2" />
-          </svg>
-        </button>
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="22" y1="2" x2="11" y2="13" />
+              <polygon points="22 2 15 22 11 13 2 9 22 2" />
+            </svg>
+          </button>
+        </div>
       </div>
     </>
   );

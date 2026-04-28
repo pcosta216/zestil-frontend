@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PlanTab } from "./PlanTab";
+import { ExploreTab } from "./ExploreTab";
 import { SavedTab } from "./SavedTab";
 import SignOutButton from "./SignOutButton";
 import type { RecipeCollection } from "@/lib/supabase/queries";
@@ -14,7 +14,7 @@ interface Props {
 }
 
 export function AppShell({ user, initialRecipes }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("plan");
+  const [activeTab, setActiveTab] = useState<Tab>("explore");
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
@@ -23,9 +23,9 @@ export function AppShell({ user, initialRecipes }: Props) {
           Zestil<span className="text-green-primary">.</span>
         </span>
         <div className="flex items-center gap-2.5">
-          {activeTab === "plan" && (
+          {activeTab === "explore" && (
             <span className="text-[12px] font-medium text-green-primary bg-green-light px-3 py-1 rounded-full border border-green-border">
-              Week of Apr 21
+              Week of {currentWeekLabel()}
             </span>
           )}
           {activeTab === "saved" && <SignOutButton />}
@@ -36,13 +36,13 @@ export function AppShell({ user, initialRecipes }: Props) {
       </header>
 
       <div className="flex-1 min-h-0 flex flex-col">
-        <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <PlanTab />
+        <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+          <ExploreTab />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <SavedTab recipes={initialRecipes} />
         </div>
-        <div className={["explore", "groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
+        <div className={["plan", "groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
           <span className="text-3xl">🌱</span>
           <p className="text-sm">Coming soon</p>
         </div>
@@ -67,6 +67,14 @@ export function AppShell({ user, initialRecipes }: Props) {
       </nav>
     </div>
   );
+}
+
+function currentWeekLabel() {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1));
+  return monday.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 const NAV_ITEMS = [
