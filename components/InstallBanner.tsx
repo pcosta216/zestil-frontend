@@ -10,6 +10,12 @@ export function InstallBanner() {
   const [showIosSteps, setShowIosSteps] = useState(false);
 
   useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+  }, []);
+
+  useEffect(() => {
     if (localStorage.getItem("install-banner-dismissed")) return;
 
     const isStandalone =
