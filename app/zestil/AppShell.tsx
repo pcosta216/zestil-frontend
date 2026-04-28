@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { ExploreTab } from "./ExploreTab";
 import { SavedTab } from "./SavedTab";
 import SignOutButton from "./SignOutButton";
@@ -15,6 +15,14 @@ interface Props {
 
 export function AppShell({ user, initialRecipes }: Props) {
   const [activeTab, setActiveTab] = useState<Tab>("explore");
+
+  const collections = useMemo(() => {
+    const seen = new Set<string>();
+    return initialRecipes
+      .map((r) => r.collections_short_desc)
+      .filter((c): c is string => !!c && !seen.has(c) && !!seen.add(c))
+      .sort((a, b) => a.localeCompare(b));
+  }, [initialRecipes]);
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
@@ -37,7 +45,7 @@ export function AppShell({ user, initialRecipes }: Props) {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <ExploreTab />
+          <ExploreTab collections={collections} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <SavedTab recipes={initialRecipes} />
