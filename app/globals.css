@@ -46,7 +46,7 @@ body {
 
 .chat-markdown { color: #2c2c2a; font-size: 13.5px; line-height: 1.5; }
 .chat-markdown p, .chat-markdown blockquote { margin-top: 0.25em; margin-bottom: 0.25em; }
-.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4 { color: #2c2c2a; margin-top: 0.75em; margin-bottom: 0.25em; font-weight: 600; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4 { color: #2c2c2a; margin-top: 0.75em; margin-bottom: 0.25em; font-weight: 600; font-size: 1.10em;}
 .chat-markdown h1 { font-size: 1.15em; }
 .chat-markdown h2 { font-size: 1.05em; }
 .chat-markdown h3, .chat-markdown h4 { font-size: 1em; }
