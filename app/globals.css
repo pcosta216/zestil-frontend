@@ -44,6 +44,22 @@ body {
   }
 }
 
+.chat-markdown { color: #2c2c2a; font-size: 13.5px; line-height: 1.5; }
+.chat-markdown p, .chat-markdown blockquote { margin-top: 0.25em; margin-bottom: 0.25em; }
+.chat-markdown h1, .chat-markdown h2, .chat-markdown h3, .chat-markdown h4 { color: #2c2c2a; margin-top: 0.75em; margin-bottom: 0.25em; font-weight: 600; }
+.chat-markdown h1 { font-size: 1.15em; }
+.chat-markdown h2 { font-size: 1.05em; }
+.chat-markdown h3, .chat-markdown h4 { font-size: 1em; }
+.chat-markdown ul { list-style-type: disc !important; padding-left: 1.25em; margin-top: 0.15em; margin-bottom: 0.15em; }
+.chat-markdown ol { list-style-type: decimal !important; padding-left: 1.25em; margin-top: 0.15em; margin-bottom: 0.15em; }
+.chat-markdown li { margin-top: 0.15em; margin-bottom: 0.15em; }
+.chat-markdown li::marker { color: #3b6d11; font-size: 0.85em; }
+.chat-markdown hr { border-color: rgba(0,0,0,0.1); margin-top: 0.5em; margin-bottom: 0.5em; }
+.chat-markdown code { color: #2c2c2a; }
+.chat-markdown strong { color: #2c2c2a; }
+.chat-markdown > *:first-child { margin-top: 0; }
+.chat-markdown > *:last-child { margin-bottom: 0; }
+
 @keyframes chat-bounce {
   0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
   30% { transform: translateY(-5px); opacity: 1; }

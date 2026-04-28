@@ -261,7 +261,7 @@ export function ExploreTab() {
           }
 
           return (
-            <div key={msg.id} className="flex gap-2.5 items-start max-w-[86%]">
+            <div key={msg.id} className="flex gap-2.5 items-start max-w-[95%]">
               <AgentIcon />
               <div className="flex flex-col gap-1.5 min-w-0">
                 {msg.reasoning && <ReasoningPill reasoning={msg.reasoning} />}
@@ -269,7 +269,7 @@ export function ExploreTab() {
                   className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main"
                   style={{ borderRadius: "4px 16px 16px 16px" }}
                 >
-                  <div className="prose prose-sm max-w-none prose-headings:text-text-main prose-p:text-text-main prose-li:text-text-main prose-strong:text-text-main prose-code:text-text-main prose-hr:border-[rgba(0,0,0,0.1)]">
+                  <div className="chat-markdown">
                     <Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown>
                   </div>
                 </div>
