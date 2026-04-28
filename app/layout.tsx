@@ -18,6 +18,12 @@ const dmSans = DM_Sans({
 export const metadata: Metadata = {
   title: "Zestil — meal planner",
   description: "Your AI-powered weekly meal planner",
+  manifest: "/manifest.json",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Zestil",
+  },
 };
 
 export default function RootLayout({

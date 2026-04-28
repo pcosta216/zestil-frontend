@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { ExploreTab } from "./ExploreTab";
 import { SavedTab } from "./SavedTab";
 import SignOutButton from "./SignOutButton";
+import { InstallBanner } from "@/components/InstallBanner";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
@@ -26,6 +27,7 @@ export function AppShell({ user, initialRecipes }: Props) {
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
+      <InstallBanner />
       <header className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.07)] flex-shrink-0">
         <span className="font-display text-[22px] tracking-tight text-text-main">
           Zestil<span className="text-green-primary">.</span>

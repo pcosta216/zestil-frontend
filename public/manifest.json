@@ -1,0 +1,24 @@
+{
+  "name": "Zestil",
+  "short_name": "Zestil",
+  "description": "Your AI-powered weekly meal planner",
+  "start_url": "/zestil",
+  "display": "standalone",
+  "background_color": "#f7f4ee",
+  "theme_color": "#3b6d11",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
