@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { ExploreTab } from "./ExploreTab";
+import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
 import SignOutButton from "./SignOutButton";
 import { InstallBanner } from "@/components/InstallBanner";
@@ -46,13 +47,16 @@ export function AppShell({ user, initialRecipes }: Props) {
       </header>
 
       <div className="flex-1 min-h-0 flex flex-col">
+        <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+          <PlanTab />
+        </div>
         <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <ExploreTab collections={collections} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <SavedTab recipes={initialRecipes} />
         </div>
-        <div className={["plan", "groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
+        <div className={["groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
           <span className="text-3xl">🌱</span>
           <p className="text-sm">Coming soon</p>
         </div>
