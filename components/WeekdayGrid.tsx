@@ -26,22 +26,30 @@ const MACRO_LABELS: { key: keyof MacroData; label: string; fill: string; track: 
   { key: "sodium",  label: "sodium",  fill: "#3B6D11", track: "#E8F0DC" },
 ];
 
+function resolveColor(pct: number, defaultFill: string, defaultTrack: string) {
+  if (pct >= 1.30) return { fill: "#EF4444", track: "#FEE2E2" };
+  if (pct >= 1.15) return { fill: "#f9cb16", track: "#fdf3c0" };
+  return { fill: defaultFill, track: defaultTrack };
+}
+
 function MacroRing({ value, goal, label, fill, track }: { value: number; goal: number; label: string; fill: string; track: string }) {
   const r    = 16;
   const circ = 2 * Math.PI * r;
-  const pct  = goal > 0 ? Math.min(value / goal, 1) : 0;
+  const pct  = goal > 0 ? value / goal : 0;
+  const { fill: activeFill, track: activeTrack } = resolveColor(pct, fill, track);
+  const capped = Math.min(pct, 1);
 
   return (
     <div className="flex flex-col items-center gap-0.5">
       <svg width="40" height="40" viewBox="0 0 40 40">
-        <circle cx="20" cy="20" r={r} fill="none" stroke={track} strokeWidth="4" />
+        <circle cx="20" cy="20" r={r} fill="none" stroke={activeTrack} strokeWidth="4" />
         <circle
           cx="20" cy="20" r={r}
           fill="none"
-          stroke={fill}
+          stroke={activeFill}
           strokeWidth="4"
           strokeLinecap="round"
-          strokeDasharray={`${circ * pct} ${circ}`}
+          strokeDasharray={`${circ * capped} ${circ}`}
           transform="rotate(-90 20 20)"
         />
         <text x="20" y="24" textAnchor="middle" fontSize="8" fontWeight="600" fill="#2c2c2a">
