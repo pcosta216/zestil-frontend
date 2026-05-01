@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
@@ -202,7 +202,7 @@ function SuggestionBubble({ content, onConfirm, onReject }: { content: string; o
 
 // ── Message renderer ──────────────────────────────────────────────────────────
 
-function AgentBubble({ msg, onSend, macroGoals }: { msg: AgentMessage; onSend: (text: string) => void; macroGoals: MacroData | null }) {
+function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string) => void }) {
   const rt = msg.responseType;
 
   let body: React.ReactNode;
@@ -229,42 +229,58 @@ function AgentBubble({ msg, onSend, macroGoals }: { msg: AgentMessage; onSend: (
     );
   }
 
-  const cards = msg.mealCards ?? [];
-
   return (
     <div className="flex gap-2.5 items-start max-w-[95%]">
       <AgentIcon />
       <div className="flex flex-col gap-1.5 min-w-0 w-full">
         {body}
-        {cards.length > 0 && (() => {
-          const groups = new Map<string, MealCard[]>();
-          for (const card of cards) {
-            const weekday = card.meal_summary?.weekday ?? card.day ?? "Unknown";
-            if (!groups.has(weekday)) groups.set(weekday, []);
-            groups.get(weekday)!.push(card);
-          }
-          return (
-            <div className="flex flex-col gap-2">
-              {Array.from(groups.entries()).map(([weekday, dayCards]) => (
-                <WeekdayGrid key={weekday} weekday={weekday} macros={dayCards.reduce<MacroData>((acc, c) => ({ kcal: (acc.kcal ?? 0) + (c.macros?.kcal ?? 0), protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0), carbs: (acc.carbs ?? 0) + (c.macros?.carbs ?? 0), fat: (acc.fat ?? 0) + (c.macros?.fat ?? 0), sugar: (acc.sugar ?? 0) + (c.macros?.sugar ?? 0), sodium: (acc.sodium ?? 0) + (c.macros?.sodium ?? 0) }), {})} goals={macroGoals ?? undefined}>
-                  {dayCards.map((card, i) => (
-                    <WeekdayRecipeCard
-                      key={card.entry_id ?? `${card.name}-${i}`}
-                      title={card.name}
-                      subtitle={card.meal_slot}
-                      kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
-                      protein={card.macros?.protein}
-                      hasSuggestion={card.agent_suggestion?.status === "pending"}
-                      hasNotes={!!card.notes}
-                      onClick={() => onSend(`Tell me more about "${card.name}"`)}
-                    />
-                  ))}
-                </WeekdayGrid>
-              ))}
-            </div>
-          );
-        })()}
       </div>
+    </div>
+  );
+}
+
+function groupByDay(cards: MealCard[]) {
+  const groups = new Map<string, MealCard[]>();
+  for (const card of cards) {
+    const weekday = card.meal_summary?.weekday ?? card.day ?? "Unknown";
+    if (!groups.has(weekday)) groups.set(weekday, []);
+    groups.get(weekday)!.push(card);
+  }
+  return groups;
+}
+
+function DayGrids({ cards, goals, onSend }: { cards: MealCard[]; goals: MacroData | null; onSend: (text: string) => void }) {
+  const groups = groupByDay(cards);
+  return (
+    <div className="flex flex-col gap-2 -mx-2">
+      {Array.from(groups.entries()).map(([weekday, dayCards]) => (
+        <WeekdayGrid
+          key={weekday}
+          weekday={weekday}
+          macros={dayCards.reduce<MacroData>((acc, c) => ({
+            kcal:    (acc.kcal    ?? 0) + (c.macros?.kcal    ?? 0),
+            protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0),
+            carbs:   (acc.carbs   ?? 0) + (c.macros?.carbs   ?? 0),
+            fat:     (acc.fat     ?? 0) + (c.macros?.fat     ?? 0),
+            sugar:   (acc.sugar   ?? 0) + (c.macros?.sugar   ?? 0),
+            sodium:  (acc.sodium  ?? 0) + (c.macros?.sodium  ?? 0),
+          }), {})}
+          goals={goals ?? undefined}
+        >
+          {dayCards.map((card, i) => (
+            <WeekdayRecipeCard
+              key={card.entry_id ?? `${card.name}-${i}`}
+              title={card.name}
+              subtitle={card.meal_slot}
+              kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
+              protein={card.macros?.protein}
+              hasSuggestion={card.agent_suggestion?.status === "pending"}
+              hasNotes={!!card.notes}
+              onClick={() => onSend(`Tell me more about "${card.name}"`)}
+            />
+          ))}
+        </WeekdayGrid>
+      ))}
     </div>
   );
 }
@@ -377,7 +393,12 @@ export function PlanTab() {
               {msg.content}
             </div>
           ) : (
-            <AgentBubble key={msg.id} msg={msg} onSend={sendMessage} macroGoals={macroGoals} />
+            <React.Fragment key={msg.id}>
+              <AgentBubble msg={msg} onSend={sendMessage} />
+              {(msg.mealCards?.length ?? 0) > 0 && (
+                <DayGrids cards={msg.mealCards!} goals={macroGoals} onSend={sendMessage} />
+              )}
+            </React.Fragment>
           )
         )}
 
