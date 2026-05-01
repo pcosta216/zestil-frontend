@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
+import { WeekdayGrid } from "@/components/WeekdayGrid";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -28,6 +29,7 @@ interface MealCard {
   confirmed:          boolean;
   notes?:             string | null;
   metadata:           Record<string, any>;
+  meal_summary?:      { weekday?: string; [key: string]: unknown };
 }
 
 type AgentMessage = {
@@ -234,22 +236,34 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
       <AgentIcon />
       <div className="flex flex-col gap-1.5 min-w-0 w-full">
         {body}
-        {cards.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            {cards.map((card, i) => (
-              <WeekdayRecipeCard
-                key={card.entry_id ?? `${card.name}-${i}`}
-                title={card.name}
-                subtitle={`${card.day} · ${card.meal_slot}`}
-                kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
-                protein={card.macros?.protein}
-                hasSuggestion={card.agent_suggestion?.status === "pending"}
-                hasNotes={!!card.notes}
-                onClick={() => onSend(`Tell me more about "${card.name}"`)}
-              />
-            ))}
-          </div>
-        )}
+        {cards.length > 0 && (() => {
+          const groups = new Map<string, MealCard[]>();
+          for (const card of cards) {
+            const weekday = card.meal_summary?.weekday ?? card.day ?? "Unknown";
+            if (!groups.has(weekday)) groups.set(weekday, []);
+            groups.get(weekday)!.push(card);
+          }
+          return (
+            <div className="flex flex-col gap-2">
+              {Array.from(groups.entries()).map(([weekday, dayCards]) => (
+                <WeekdayGrid key={weekday} weekday={weekday}>
+                  {dayCards.map((card, i) => (
+                    <WeekdayRecipeCard
+                      key={card.entry_id ?? `${card.name}-${i}`}
+                      title={card.name}
+                      subtitle={card.meal_slot}
+                      kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
+                      protein={card.macros?.protein}
+                      hasSuggestion={card.agent_suggestion?.status === "pending"}
+                      hasNotes={!!card.notes}
+                      onClick={() => onSend(`Tell me more about "${card.name}"`)}
+                    />
+                  ))}
+                </WeekdayGrid>
+              ))}
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
