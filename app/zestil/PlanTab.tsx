@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
-import { WeekdayGrid } from "@/components/WeekdayGrid";
+import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ interface MealCard {
   confirmed:          boolean;
   notes?:             string | null;
   metadata:           Record<string, any>;
-  meal_summary?:      { weekday?: string; [key: string]: unknown };
+  meal_summary?:      { weekday?: string; kcal?: number; protein?: number; carbs?: number; fat?: number; sugar?: number; sodium?: number; [key: string]: unknown };
 }
 
 type AgentMessage = {
@@ -145,10 +145,10 @@ function MacroSummaryBubble({ content }: { content: string }) {
       {pct !== null && (
         <div className="bg-white border border-[rgba(0,0,0,0.08)] rounded-2xl px-4 py-3 flex items-center gap-4">
           <svg width="72" height="72" viewBox="0 0 72 72">
-            <circle cx="36" cy="36" r={r} fill="none" stroke="#E8F0DC" strokeWidth="7" />
+            <circle cx="36" cy="36" r={r} fill="none" stroke="#C8EDFE" strokeWidth="7" />
             <circle
               cx="36" cy="36" r={r} fill="none"
-              stroke="#5C9A1F" strokeWidth="7"
+              stroke="#23BCFD" strokeWidth="7"
               strokeLinecap="round"
               strokeDasharray={`${circ * pct} ${circ}`}
               transform="rotate(-90 36 36)"
@@ -202,7 +202,7 @@ function SuggestionBubble({ content, onConfirm, onReject }: { content: string; o
 
 // ── Message renderer ──────────────────────────────────────────────────────────
 
-function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string) => void }) {
+function AgentBubble({ msg, onSend, macroGoals }: { msg: AgentMessage; onSend: (text: string) => void; macroGoals: MacroData | null }) {
   const rt = msg.responseType;
 
   let body: React.ReactNode;
@@ -246,7 +246,7 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
           return (
             <div className="flex flex-col gap-2">
               {Array.from(groups.entries()).map(([weekday, dayCards]) => (
-                <WeekdayGrid key={weekday} weekday={weekday}>
+                <WeekdayGrid key={weekday} weekday={weekday} macros={dayCards.reduce<MacroData>((acc, c) => ({ kcal: (acc.kcal ?? 0) + (c.macros?.kcal ?? 0), protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0), carbs: (acc.carbs ?? 0) + (c.macros?.carbs ?? 0), fat: (acc.fat ?? 0) + (c.macros?.fat ?? 0), sugar: (acc.sugar ?? 0) + (c.macros?.sugar ?? 0), sodium: (acc.sodium ?? 0) + (c.macros?.sodium ?? 0) }), {})} goals={macroGoals ?? undefined}>
                   {dayCards.map((card, i) => (
                     <WeekdayRecipeCard
                       key={card.entry_id ?? `${card.name}-${i}`}
@@ -283,14 +283,26 @@ const INITIAL_MESSAGES: Message[] = [
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
 export function PlanTab() {
-  const [messages, setMessages]       = useState<Message[]>(INITIAL_MESSAGES);
-  const [isTyping, setIsTyping]       = useState(false);
-  const [input, setInput]             = useState("");
+  const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
+  const [isTyping, setIsTyping]         = useState(false);
+  const [input, setInput]               = useState("");
   const [quickReplies, setQuickReplies] = useState(DEFAULT_QUICK_REPLIES);
-  const chatRef                        = useRef<HTMLDivElement>(null);
-  const textareaRef                    = useRef<HTMLTextAreaElement>(null);
-  const apiHistory                     = useRef<HistoryEntry[]>([]);
-  const sessionId                      = useRef(crypto.randomUUID());
+  const [macroGoals, setMacroGoals]     = useState<MacroData | null>(null);
+  const chatRef                         = useRef<HTMLDivElement>(null);
+  const textareaRef                     = useRef<HTMLTextAreaElement>(null);
+  const apiHistory                      = useRef<HistoryEntry[]>([]);
+  const sessionId                       = useRef(crypto.randomUUID());
+
+  useEffect(() => {
+    console.log("[goals] fetching...");
+    fetch("/api/goals")
+      .then((r) => { console.log("[goals] status:", r.status); return r.json(); })
+      .then((data) => {
+        console.log("[goals] data:", data);
+        if (data && !data.error) setMacroGoals(data);
+      })
+      .catch((e) => console.error("[goals] error:", e));
+  }, []);
 
   useEffect(() => {
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
@@ -365,7 +377,7 @@ export function PlanTab() {
               {msg.content}
             </div>
           ) : (
-            <AgentBubble key={msg.id} msg={msg} onSend={sendMessage} />
+            <AgentBubble key={msg.id} msg={msg} onSend={sendMessage} macroGoals={macroGoals} />
           )
         )}
 
