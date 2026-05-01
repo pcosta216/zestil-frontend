@@ -16,12 +16,18 @@ type ResponseType =
   | "info";
 
 interface MealCard {
-  day?: string;
-  name?: string;
-  title?: string;
-  time?: string;
-  difficulty?: string;
-  [key: string]: unknown;
+  entry_id:           string;
+  day:                string;
+  date:               string;
+  meal_slot:          string;
+  name:               string;
+  serving_multiplier?: number;
+  quantity_g?:        number;
+  macros:             { kcal: number; protein: number; carbs: number; fat: number; sugar: number; sodium: number };
+  agent_suggestion?:  any;
+  confirmed:          boolean;
+  notes?:             string | null;
+  metadata:           Record<string, any>;
 }
 
 type AgentMessage = {
@@ -230,20 +236,18 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
         {body}
         {cards.length > 0 && (
           <div className="flex flex-col gap-1.5">
-            {cards.map((card, i) => {
-              const title = (card.name ?? card.title ?? "") as string;
-              const time  = (card.time ?? "") as string;
-              const diff  = (card.difficulty ?? "") as string;
-              return (
-                <WeekdayRecipeCard
-                  key={title || i}
-                  title={title}
-                  time={time}
-                  difficulty={diff}
-                  onClick={() => onSend(`Tell me more about "${title}"`)}
-                />
-              );
-            })}
+            {cards.map((card, i) => (
+              <WeekdayRecipeCard
+                key={card.entry_id ?? `${card.name}-${i}`}
+                title={card.name}
+                subtitle={`${card.day} · ${card.meal_slot}`}
+                kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
+                protein={card.macros?.protein}
+                hasSuggestion={card.agent_suggestion?.status === "pending"}
+                hasNotes={!!card.notes}
+                onClick={() => onSend(`Tell me more about "${card.name}"`)}
+              />
+            ))}
           </div>
         )}
       </div>

@@ -1,26 +1,34 @@
 interface Props {
-  title: string;
-  time: string;
-  difficulty: string;
-  onClick?: () => void;
+  title:          string;
+  subtitle?:      string;
+  kcal?:          number;
+  protein?:       number;
+  hasSuggestion?: boolean;
+  hasNotes?:      boolean;
+  onClick?:       () => void;
 }
 
-export function WeekdayRecipeCard({ title, time, difficulty, onClick }: Props) {
+export function WeekdayRecipeCard({ title, subtitle, kcal, protein, hasSuggestion, hasNotes, onClick }: Props) {
   return (
     <button
       onClick={onClick}
-      className="w-60 h-9 px-3 bg-warm border border-[rgba(0,0,0,0.07)] rounded-lg inline-flex justify-between items-center hover:border-green-border transition-colors"
+      className="w-full h-10 px-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex justify-between items-center hover:border-green-border transition-colors"
     >
-      <span className="font-display text-[10px] text-text-main truncate">{title}</span>
+      <div className="flex flex-col items-start min-w-0">
+        <span className="font-display text-[11px] text-text-main truncate leading-tight">{title}</span>
+        {subtitle && (
+          <span className="text-[9px] text-text-muted leading-tight">{subtitle}</span>
+        )}
+      </div>
       <div className="flex items-center gap-1.5 flex-shrink-0">
-        {time && (
-          <span className="px-2.5 py-[5px] bg-green-light rounded-full text-[10px] text-green-primary">
-            {time}
+        {hasSuggestion && (
+          <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600">
+            suggestion
           </span>
         )}
-        {difficulty && (
-          <span className="px-1.5 py-0.5 rounded-lg border border-[rgba(0,0,0,0.1)] text-[10px] text-text-muted">
-            {difficulty}
+        {kcal != null && (
+          <span className="px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary">
+            {Math.round(kcal)} kcal
           </span>
         )}
       </div>
