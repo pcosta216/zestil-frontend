@@ -52,7 +52,7 @@ function MacroRing({ value, goal, label, fill, track }: { value: number; goal: n
           strokeDasharray={`${circ * capped} ${circ}`}
           transform="rotate(-90 20 20)"
         />
-        <text x="20" y="24" textAnchor="middle" fontSize="8" fontWeight="600" fill="#2c2c2a">
+        <text x="20" y="24" textAnchor="middle" fontSize="9" fontWeight="600" fill="#2c2c2a">
           {Math.round(pct * 100)}%
         </text>
       </svg>

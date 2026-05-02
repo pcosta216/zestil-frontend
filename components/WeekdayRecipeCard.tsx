@@ -26,7 +26,7 @@ export function WeekdayRecipeCard({
 
   const actions = cardVariant === "ingredient"
     ? [
-        { icon: <Plus           size={15} />, label: "Add",    fn: onAdd,    variant: "default" as const },
+        { icon: <Plus           size={15} />, label: "Add",    fn: onAdd,    variant: "add"     as const },
         { icon: <CircleEllipsis size={15} />, label: "More",   fn: onMore,   variant: "default" as const },
         { icon: <Info           size={15} />, label: "Info",   fn: onInfo,   variant: "info"    as const },
       ]
@@ -43,10 +43,10 @@ export function WeekdayRecipeCard({
       <div
         role="button"
         onClick={() => setBarOpen(v => !v)}
-        className="relative z-10 w-full h-10 pl-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex items-center hover:border-green-border transition-colors overflow-hidden cursor-pointer"
+        className={`relative z-10 w-full h-10 pl-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex items-center hover:border-green-border transition-colors overflow-hidden cursor-pointer ${barOpen ? "" : "pr-3"}`}
       >
         <div className="flex-1 min-w-0 flex flex-col items-start">
-          <span className="font-display text-[11px] text-text-main truncate leading-tight w-full">{title}</span>
+          <span className="font-display text-[12px] text-text-main truncate leading-tight w-full">{title}</span>
           {subtitle && (
             <span className="text-[9px] text-text-muted leading-tight">{subtitle}</span>
           )}
@@ -78,6 +78,7 @@ export function WeekdayRecipeCard({
               className={`h-full w-8 flex items-center justify-center transition-colors text-white ${
                 variant === "danger" ? "bg-red-500 hover:bg-red-600"
                 : variant === "info"  ? "bg-[#23BCFD] hover:bg-[#0ea5d6]"
+                : variant === "add"   ? "bg-gray-300 hover:bg-gray-400"
                 : "bg-gray-400 hover:bg-gray-500"
               }`}
             >

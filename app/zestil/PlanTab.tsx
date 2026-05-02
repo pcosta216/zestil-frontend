@@ -313,7 +313,7 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
   );
 }
 
-function IngredientList({ cards }: { cards: IngredientCard[] }) {
+function IngredientList({ cards, onSend }: { cards: IngredientCard[]; onSend: (text: string) => void }) {
   return (
     <div className="flex flex-col gap-1 -mx-2">
       {cards.map((name, i) => (
@@ -321,6 +321,7 @@ function IngredientList({ cards }: { cards: IngredientCard[] }) {
           key={`${name}-${i}`}
           title={name}
           cardVariant="ingredient"
+          onAdd={() => onSend(`Add "${name}" to my plan`)}
         />
       ))}
     </div>
@@ -444,7 +445,7 @@ export function PlanTab() {
                 <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
-                <IngredientList cards={msg.ingredientCards!} />
+                <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
               )}
             </React.Fragment>
           )
