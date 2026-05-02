@@ -3,12 +3,13 @@ interface Props {
   subtitle?:      string;
   kcal?:          number;
   protein?:       number;
+  servings_value?: number;  
   hasSuggestion?: boolean;
   hasNotes?:      boolean;
   onClick?:       () => void;
 }
 
-export function WeekdayRecipeCard({ title, subtitle, kcal, protein, hasSuggestion, hasNotes, onClick }: Props) {
+export function WeekdayRecipeCard({ title, subtitle, kcal, protein, servings_value, hasSuggestion, hasNotes, onClick }: Props) {
   return (
     <button
       onClick={onClick}
@@ -28,7 +29,7 @@ export function WeekdayRecipeCard({ title, subtitle, kcal, protein, hasSuggestio
         )}
         {kcal != null && (
           <span className="px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary">
-            {Math.round(kcal)} kcal
+            {Math.round(kcal / (servings_value ?? 1))} kcal
           </span>
         )}
       </div>

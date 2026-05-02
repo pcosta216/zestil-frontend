@@ -273,6 +273,7 @@ function DayGrids({ cards, goals, onSend }: { cards: MealCard[]; goals: MacroDat
               title={card.name}
               subtitle={card.meal_slot}
               kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
+              servings_value={card.metadata?.metadata?.servings_value}
               protein={card.macros?.protein}
               hasSuggestion={card.agent_suggestion?.status === "pending"}
               hasNotes={!!card.notes}
