@@ -11,7 +11,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("tbl_user_goals")
-    .select("macro_goals")
+    .select("macro_goals, preferences")
     .eq("account_key", user.id)
     .single();
 
@@ -20,5 +20,8 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json(data?.macro_goals ?? {});
+  return NextResponse.json({
+    macro_goals:  data?.macro_goals  ?? {},
+    preferences:  data?.preferences  ?? {},
+  });
 }

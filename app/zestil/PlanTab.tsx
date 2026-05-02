@@ -14,6 +14,7 @@ type ResponseType =
   | "recipe_list"
   | "macro_summary"
   | "suggestion_pending"
+  | "ingredients_list"
   | "info";
 
 interface MealCard {
@@ -32,12 +33,15 @@ interface MealCard {
   meal_summary?:      { weekday?: string; kcal?: number; protein?: number; carbs?: number; fat?: number; sugar?: number; sodium?: number; [key: string]: unknown };
 }
 
+type IngredientCard = string;
+
 type AgentMessage = {
   id: string;
   type: "agent";
   content: string;
   responseType: ResponseType;
   mealCards?: MealCard[];
+  ingredientCards?: IngredientCard[];
   changedDates?: string[];
   quickReplies?: string[];
 };
@@ -239,6 +243,18 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
   );
 }
 
+function ordinalDate(dateStr?: string): string | undefined {
+  if (!dateStr) return undefined;
+  const d = new Date(dateStr + "T00:00:00");
+  const month = d.toLocaleDateString("en-US", { month: "long" });
+  const day   = d.getDate();
+  const suffix = [11, 12, 13].includes(day) ? "th"
+    : day % 10 === 1 ? "st"
+    : day % 10 === 2 ? "nd"
+    : day % 10 === 3 ? "rd" : "th";
+  return `${month} ${day}${suffix}`;
+}
+
 function groupByDay(cards: MealCard[]) {
   const groups = new Map<string, MealCard[]>();
   for (const card of cards) {
@@ -249,38 +265,63 @@ function groupByDay(cards: MealCard[]) {
   return groups;
 }
 
-function DayGrids({ cards, goals, onSend }: { cards: MealCard[]; goals: MacroData | null; onSend: (text: string) => void }) {
+function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onSend: (text: string) => void }) {
   const groups = groupByDay(cards);
   return (
     <div className="flex flex-col gap-2 -mx-2">
-      {Array.from(groups.entries()).map(([weekday, dayCards]) => (
-        <WeekdayGrid
-          key={weekday}
-          weekday={weekday}
-          macros={dayCards.reduce<MacroData>((acc, c) => ({
-            kcal:    (acc.kcal    ?? 0) + (c.macros?.kcal    ?? 0),
-            protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0),
-            carbs:   (acc.carbs   ?? 0) + (c.macros?.carbs   ?? 0),
-            fat:     (acc.fat     ?? 0) + (c.macros?.fat     ?? 0),
-            sugar:   (acc.sugar   ?? 0) + (c.macros?.sugar   ?? 0),
-            sodium:  (acc.sodium  ?? 0) + (c.macros?.sodium  ?? 0),
-          }), {})}
-          goals={goals ?? undefined}
-        >
-          {dayCards.map((card, i) => (
-            <WeekdayRecipeCard
-              key={card.entry_id ?? `${card.name}-${i}`}
-              title={card.name}
-              subtitle={card.meal_slot}
-              kcal={card.metadata?.recipe_totals?.find((n: { nutrientname: string; total_value: number }) => n.nutrientname === "Energy")?.total_value}
-              servings_value={card.metadata?.metadata?.servings_value}
-              protein={card.macros?.protein}
-              hasSuggestion={card.agent_suggestion?.status === "pending"}
-              hasNotes={!!card.notes}
-              onClick={() => onSend(`Tell me more about "${card.name}"`)}
-            />
-          ))}
-        </WeekdayGrid>
+      {Array.from(groups.entries()).map(([weekday, dayCards]) => {
+        const sorted = mealSlots.length
+          ? [...dayCards].sort((a, b) => {
+              const ai = mealSlots.findIndex((s) => s.toLowerCase() === a.meal_slot?.toLowerCase());
+              const bi = mealSlots.findIndex((s) => s.toLowerCase() === b.meal_slot?.toLowerCase());
+              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+            })
+          : dayCards;
+        return (
+          <WeekdayGrid
+            key={weekday}
+            weekday={weekday}
+            date={ordinalDate(dayCards[0]?.date)}
+            macros={dayCards.reduce<MacroData>((acc, c) => ({
+              kcal:    (acc.kcal    ?? 0) + (c.macros?.kcal    ?? 0),
+              protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0),
+              carbs:   (acc.carbs   ?? 0) + (c.macros?.carbs   ?? 0),
+              fat:     (acc.fat     ?? 0) + (c.macros?.fat     ?? 0),
+              sugar:   (acc.sugar   ?? 0) + (c.macros?.sugar   ?? 0),
+              sodium:  (acc.sodium  ?? 0) + (c.macros?.sodium  ?? 0),
+            }), {})}
+            goals={goals ?? undefined}
+          >
+            {sorted.map((card, i) => (
+              <WeekdayRecipeCard
+                key={card.entry_id ?? `${card.name}-${i}`}
+                title={card.name}
+                subtitle={card.meal_slot}
+                kcal={card.macros?.kcal}
+                servings_value={card.metadata?.metadata?.servings_value}
+                protein={card.macros?.protein}
+                hasSuggestion={card.agent_suggestion?.status === "pending"}
+                hasNotes={!!card.notes}
+                onMore={() => onSend(`Tell me more about "${card.name}"`)}
+                onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan${card.entry_id ? ` (entry id: ${card.entry_id})` : ""}`)}
+              />
+            ))}
+          </WeekdayGrid>
+        );
+      })}
+    </div>
+  );
+}
+
+function IngredientList({ cards }: { cards: IngredientCard[] }) {
+  return (
+    <div className="flex flex-col gap-1 -mx-2">
+      {cards.map((name, i) => (
+        <WeekdayRecipeCard
+          key={`${name}-${i}`}
+          title={name}
+          cardVariant="ingredient"
+        />
       ))}
     </div>
   );
@@ -305,18 +346,20 @@ export function PlanTab() {
   const [input, setInput]               = useState("");
   const [quickReplies, setQuickReplies] = useState(DEFAULT_QUICK_REPLIES);
   const [macroGoals, setMacroGoals]     = useState<MacroData | null>(null);
+  const [mealSlots, setMealSlots]       = useState<string[]>([]);
   const chatRef                         = useRef<HTMLDivElement>(null);
   const textareaRef                     = useRef<HTMLTextAreaElement>(null);
   const apiHistory                      = useRef<HistoryEntry[]>([]);
   const sessionId                       = useRef(crypto.randomUUID());
 
   useEffect(() => {
-    console.log("[goals] fetching...");
     fetch("/api/goals")
-      .then((r) => { console.log("[goals] status:", r.status); return r.json(); })
+      .then((r) => r.json())
       .then((data) => {
-        console.log("[goals] data:", data);
-        if (data && !data.error) setMacroGoals(data);
+        if (data && !data.error) {
+          if (data.macro_goals) setMacroGoals(data.macro_goals);
+          if (Array.isArray(data.preferences?.meal_slots)) setMealSlots(data.preferences.meal_slots);
+        }
       })
       .catch((e) => console.error("[goals] error:", e));
   }, []);
@@ -355,15 +398,16 @@ export function PlanTab() {
 
       const data = await res.json();
       console.log("[plan] raw response:", data);
-      const { response, response_type, meal_cards, quick_replies, changed_dates } = data;
+      const { response, response_type, meal_cards, ingredient_cards, quick_replies, changed_dates } = data;
 
       const agentMsg: AgentMessage = {
-        id:           `agent-${Date.now()}`,
-        type:         "agent",
-        content:      response?.trim() || "Sorry, I couldn't generate a response.",
-        responseType: (response_type as ResponseType) ?? "info",
-        mealCards:    meal_cards?.length ? meal_cards : undefined,
-        changedDates: changed_dates?.length ? changed_dates : undefined,
+        id:              `agent-${Date.now()}`,
+        type:            "agent",
+        content:         response?.trim() || "Sorry, I couldn't generate a response.",
+        responseType:    (response_type as ResponseType) ?? "info",
+        mealCards:       meal_cards?.length ? meal_cards : undefined,
+        ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
+        changedDates:    changed_dates?.length ? changed_dates : undefined,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -397,7 +441,10 @@ export function PlanTab() {
             <React.Fragment key={msg.id}>
               <AgentBubble msg={msg} onSend={sendMessage} />
               {(msg.mealCards?.length ?? 0) > 0 && (
-                <DayGrids cards={msg.mealCards!} goals={macroGoals} onSend={sendMessage} />
+                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} />
+              )}
+              {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
+                <IngredientList cards={msg.ingredientCards!} />
               )}
             </React.Fragment>
           )
