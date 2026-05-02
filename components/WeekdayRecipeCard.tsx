@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ResponseCardBar } from "@/components/ResponseCardBar";
+import { Trash2, CircleEllipsis, Plus, Info } from "@/lib/icons";
 
 interface Props {
   title:           string;
@@ -18,48 +18,74 @@ interface Props {
   onInfo?:         () => void;
 }
 
-export function WeekdayRecipeCard({ title, subtitle, kcal, servings_value, hasSuggestion, cardVariant = "recipe", onMore, onAdd, onDelete, onInfo }: Props) {
+export function WeekdayRecipeCard({
+  title, subtitle, kcal, hasSuggestion,
+  cardVariant = "recipe", onMore, onAdd, onDelete, onInfo,
+}: Props) {
   const [barOpen, setBarOpen] = useState(false);
+
+  const actions = cardVariant === "ingredient"
+    ? [
+        { icon: <Plus           size={15} />, label: "Add",    fn: onAdd,    variant: "default" as const },
+        { icon: <CircleEllipsis size={15} />, label: "More",   fn: onMore,   variant: "default" as const },
+        { icon: <Info           size={15} />, label: "Info",   fn: onInfo,   variant: "info"    as const },
+      ]
+    : [
+        { icon: <CircleEllipsis size={15} />, label: "More",   fn: onMore,   variant: "default" as const },
+        { icon: <Trash2         size={15} />, label: "Delete", fn: onDelete, variant: "danger"  as const },
+      ];
 
   return (
     <div className="relative">
       {barOpen && (
         <div className="fixed inset-0 z-[9]" onClick={() => setBarOpen(false)} />
       )}
-      {barOpen && (
-        <div className="absolute bottom-full right-0 mb-0.5 z-10 p-0.5">
-          <ResponseCardBar
-            cardVariant={cardVariant}
-            onAdd={() => { setBarOpen(false); onAdd?.(); }}
-            onMore={() => { setBarOpen(false); onMore?.(); }}
-            onDelete={() => { setBarOpen(false); onDelete?.(); }}
-            onInfo={() => { setBarOpen(false); onInfo?.(); }}
-          />
-        </div>
-      )}
-      <button
-        onClick={() => setBarOpen((v) => !v)}
-        className="w-full h-10 px-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex justify-between items-center hover:border-green-border transition-colors"
+      <div
+        role="button"
+        onClick={() => setBarOpen(v => !v)}
+        className="relative z-10 w-full h-10 pl-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex items-center hover:border-green-border transition-colors overflow-hidden cursor-pointer"
       >
-        <div className="flex flex-col items-start min-w-0">
-          <span className="font-display text-[11px] text-text-main truncate leading-tight">{title}</span>
+        <div className="flex-1 min-w-0 flex flex-col items-start">
+          <span className="font-display text-[11px] text-text-main truncate leading-tight w-full">{title}</span>
           {subtitle && (
             <span className="text-[9px] text-text-muted leading-tight">{subtitle}</span>
           )}
         </div>
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {hasSuggestion && (
-            <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600">
+
+        {/* Suggestion badge — collapse when bar opens */}
+        {hasSuggestion && (
+          <div className={`flex-shrink-0 overflow-hidden transition-all duration-200 ${barOpen ? "max-w-0 opacity-0" : "max-w-[80px] opacity-100 ml-1.5"}`}>
+            <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600 whitespace-nowrap">
               suggestion
             </span>
-          )}
-          {kcal != null && (
-            <span className="px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary">
-              {Math.round(kcal)} kcal
-            </span>
-          )}
+          </div>
+        )}
+
+        {/* kcal — always visible */}
+        {kcal != null && (
+          <span className="ml-1.5 flex-shrink-0 px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary whitespace-nowrap">
+            {Math.round(kcal)} kcal
+          </span>
+        )}
+
+        {/* Actions — slide in from right, flush with card edge */}
+        <div className={`flex h-full flex-shrink-0 overflow-hidden transition-all duration-200 ${barOpen ? "max-w-[96px] ml-1.5" : "max-w-0"}`}>
+          {actions.map(({ icon, label, fn, variant }) => (
+            <button
+              key={label}
+              onClick={(e) => { e.stopPropagation(); setBarOpen(false); fn?.(); }}
+              aria-label={label}
+              className={`h-full w-8 flex items-center justify-center transition-colors text-white ${
+                variant === "danger" ? "bg-red-500 hover:bg-red-600"
+                : variant === "info"  ? "bg-[#23BCFD] hover:bg-[#0ea5d6]"
+                : "bg-gray-400 hover:bg-gray-500"
+              }`}
+            >
+              {icon}
+            </button>
+          ))}
         </div>
-      </button>
+      </div>
     </div>
   );
 }
