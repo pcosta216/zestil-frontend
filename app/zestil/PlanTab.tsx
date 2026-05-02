@@ -303,7 +303,7 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
                 hasSuggestion={card.agent_suggestion?.status === "pending"}
                 hasNotes={!!card.notes}
                 onMore={() => onSend(`Tell me more about "${card.name}"`)}
-                onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan${card.entry_id ? ` (entry id: ${card.entry_id})` : ""}`)}
+                onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan`)}
               />
             ))}
           </WeekdayGrid>
