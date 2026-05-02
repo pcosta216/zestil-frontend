@@ -35,6 +35,9 @@ export function WeekdayRecipeCard({
         { icon: <Trash2         size={15} />, label: "Delete", fn: onDelete, variant: "danger"  as const },
       ];
 
+  // w-8 (32px) per button + 6px inner gap spacer
+  const actionsPanelWidth = cardVariant === "ingredient" ? "max-w-[102px]" : "max-w-[70px]";
+
   return (
     <div className="relative">
       {barOpen && (
@@ -43,7 +46,7 @@ export function WeekdayRecipeCard({
       <div
         role="button"
         onClick={() => setBarOpen(v => !v)}
-        className={`relative z-10 w-full h-10 pl-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex items-center hover:border-green-border transition-colors overflow-hidden cursor-pointer ${barOpen ? "" : "pr-3"}`}
+        className="relative z-10 w-full h-10 pl-3 bg-white border border-[rgba(0,0,0,0.07)] rounded-lg flex items-center hover:border-green-border transition-colors overflow-hidden cursor-pointer"
       >
         <div className="flex-1 min-w-0 flex flex-col items-start">
           <span className="font-display text-[12px] text-text-main truncate leading-tight w-full">{title}</span>
@@ -52,10 +55,10 @@ export function WeekdayRecipeCard({
           )}
         </div>
 
-        {/* Suggestion badge — collapse when bar opens */}
+        {/* Suggestion badge — gap is inside so it animates with the panel */}
         {hasSuggestion && (
-          <div className={`flex-shrink-0 overflow-hidden transition-all duration-200 ${barOpen ? "max-w-0 opacity-0" : "max-w-[80px] opacity-100 ml-1.5"}`}>
-            <span className="px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600 whitespace-nowrap">
+          <div className={`flex-shrink-0 overflow-hidden transition-[max-width] duration-200 ${barOpen ? "max-w-0" : "max-w-[86px]"}`}>
+            <span className="ml-1.5 px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600 whitespace-nowrap inline-block">
               suggestion
             </span>
           </div>
@@ -68,8 +71,9 @@ export function WeekdayRecipeCard({
           </span>
         )}
 
-        {/* Actions — slide in from right, flush with card edge */}
-        <div className={`flex h-full flex-shrink-0 overflow-hidden transition-all duration-200 ${barOpen ? "max-w-[96px] ml-1.5" : "max-w-0"}`}>
+        {/* Actions — gap spacer inside keeps everything in sync */}
+        <div className={`flex h-full flex-shrink-0 overflow-hidden transition-[max-width] duration-200 ${barOpen ? actionsPanelWidth : "max-w-0"}`}>
+          <div className="w-1.5 flex-shrink-0" />
           {actions.map(({ icon, label, fn, variant }) => (
             <button
               key={label}
@@ -86,6 +90,9 @@ export function WeekdayRecipeCard({
             </button>
           ))}
         </div>
+
+        {/* Right padding spacer — transitions width so there's no jump */}
+        <div className={`flex-shrink-0 transition-[width] duration-200 ${barOpen ? "w-0" : "w-3"}`} />
       </div>
     </div>
   );

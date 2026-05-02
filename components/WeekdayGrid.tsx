@@ -67,7 +67,7 @@ export function WeekdayGrid({ weekday, date, macros, goals, children }: Props) {
     : [];
 
   return (
-    <div className="w-full p-3 bg-warm border border-[rgba(0,0,0,0.07)] rounded-lg flex flex-col gap-1">
+    <div className="w-full p-3 bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg flex flex-col gap-1">
       <div className="text-text-muted text-[10px] uppercase tracking-wide font-display">
         {weekday}{date && `, ${date}`}
       </div>
