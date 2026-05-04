@@ -270,19 +270,21 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
   return (
     <div className="flex flex-col gap-2 -mx-2">
       {Array.from(groups.entries()).map(([weekday, dayCards]) => {
-        const sorted = mealSlots.length
-          ? [...dayCards].sort((a, b) => {
+        const isEmpty = dayCards.every((c) => c.entry_type === "empty");
+        const realCards = isEmpty ? [] : dayCards.filter((c) => c.entry_type !== "empty");
+        const sorted = !isEmpty && mealSlots.length
+          ? [...realCards].sort((a, b) => {
               const ai = mealSlots.findIndex((s) => s.toLowerCase() === a.meal_slot?.toLowerCase());
               const bi = mealSlots.findIndex((s) => s.toLowerCase() === b.meal_slot?.toLowerCase());
               return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
             })
-          : dayCards;
+          : realCards;
         return (
           <WeekdayGrid
             key={weekday}
             weekday={weekday}
             date={ordinalDate(dayCards[0]?.date)}
-            macros={dayCards.reduce<MacroData>((acc, c) => ({
+            macros={realCards.reduce<MacroData>((acc, c) => ({
               kcal:    (acc.kcal    ?? 0) + (c.macros?.kcal    ?? 0),
               protein: (acc.protein ?? 0) + (c.macros?.protein ?? 0),
               carbs:   (acc.carbs   ?? 0) + (c.macros?.carbs   ?? 0),
@@ -292,20 +294,26 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
             }), {})}
             goals={goals ?? undefined}
           >
-            {sorted.map((card, i) => (
-              <WeekdayRecipeCard
-                key={card.entry_id ?? `${card.name}-${i}`}
-                title={card.name}
-                subtitle={card.meal_slot}
-                kcal={card.macros?.kcal}
-                servings_value={card.metadata?.metadata?.servings_value}
-                protein={card.macros?.protein}
-                hasSuggestion={card.agent_suggestion?.status === "pending"}
-                hasNotes={!!card.notes}
-                onMore={() => onSend(`Tell me more about "${card.name}"`)}
-                onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan`)}
-              />
-            ))}
+            {isEmpty ? (
+              <div className="px-3 py-2.5 text-[12px] text-text-muted italic">
+                Not planned yet — ask me to add something
+              </div>
+            ) : (
+              sorted.map((card, i) => (
+                <WeekdayRecipeCard
+                  key={card.entry_id ?? `${card.name}-${i}`}
+                  title={card.name}
+                  subtitle={card.meal_slot}
+                  kcal={card.macros?.kcal}
+                  servings_value={card.metadata?.metadata?.servings_value}
+                  protein={card.macros?.protein}
+                  hasSuggestion={card.agent_suggestion?.status === "pending"}
+                  hasNotes={!!card.notes}
+                  onMore={() => onSend(`Tell me more about "${card.name}"`)}
+                  onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan`)}
+                />
+              ))
+            )}
           </WeekdayGrid>
         );
       })}
@@ -352,6 +360,8 @@ export function PlanTab() {
   const textareaRef                     = useRef<HTMLTextAreaElement>(null);
   const apiHistory                      = useRef<HistoryEntry[]>([]);
   const sessionId                       = useRef(crypto.randomUUID());
+  const activeDate                      = useRef<string | null>(null);
+  const weekStartDay                    = useRef<number>(0); // 0 = Sunday, 1 = Monday
 
   useEffect(() => {
     fetch("/api/goals")
@@ -360,6 +370,8 @@ export function PlanTab() {
         if (data && !data.error) {
           if (data.macro_goals) setMacroGoals(data.macro_goals);
           if (Array.isArray(data.preferences?.meal_slots)) setMealSlots(data.preferences.meal_slots);
+          const pref = data.preferences?.week_start_day;
+          weekStartDay.current = (pref === "monday" || pref === 1) ? 1 : 0;
         }
       })
       .catch((e) => console.error("[goals] error:", e));
@@ -381,14 +393,23 @@ export function PlanTab() {
     const historySnapshot = [...apiHistory.current];
     apiHistory.current.push({ role: "user", content: text });
 
+    console.log(`[plan] sending message: "${text.slice(0, 80)}" active_date=${activeDate.current}`)
+    console.log(`[plan] history (${historySnapshot.length} turns):`, historySnapshot.map((h, i) => ({
+      i,
+      role:    h.role,
+      preview: h.content.slice(0, 120),
+    })))
+
     try {
       const res = await fetch("/api/plan", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message:    text,
-          session_id: sessionId.current,
-          history:    historySnapshot,
+          message:        text,
+          session_id:     sessionId.current,
+          history:        historySnapshot,
+          active_date:    activeDate.current,
+          week_start_day: weekStartDay.current,
         }),
       });
 
@@ -400,6 +421,18 @@ export function PlanTab() {
       const data = await res.json();
       console.log("[plan] raw response:", data);
       const { response, response_type, meal_cards, ingredient_cards, quick_replies, changed_dates } = data;
+
+      // Update active date from the most recent day the agent touched
+      const datesInResponse: string[] = [
+        ...(changed_dates ?? []),
+        ...(meal_cards ?? []).map((c: MealCard) => c.date).filter(Boolean),
+      ]
+      if (datesInResponse.length === 1 || new Set(datesInResponse).size === 1) {
+        activeDate.current = datesInResponse[0]
+      } else if (datesInResponse.length > 1) {
+        // multiple days shown (week view) — clear the single-day context
+        activeDate.current = null
+      }
 
       const agentMsg: AgentMessage = {
         id:              `agent-${Date.now()}`,
