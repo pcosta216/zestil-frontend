@@ -365,7 +365,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
   const [saving,         setSaving]         = useState<Set<string>>(new Set());
   const [saved,          setSaved]          = useState<Set<string>>(new Set());
   const [selectedSlots,  setSelectedSlots]  = useState<Map<string, string>>(new Map());
-  const [banner,         setBanner]         = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [banner,         setBanner]         = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const chatRef                         = useRef<HTMLDivElement>(null);
   const textareaRef                     = useRef<HTMLTextAreaElement>(null);
   const apiHistory                      = useRef<HistoryEntry[]>([]);
@@ -374,7 +374,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
   const weekStartDay                    = useRef<number>(0);
   const bannerTimer                     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function showBanner(b: { type: "success" | "error"; message: string }) {
+  function showBanner(b: { type: "success" | "info" | "error"; message: string }) {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
     setBanner(b);
     bannerTimer.current = setTimeout(() => setBanner(null), 5000);
@@ -552,7 +552,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                               onClick={async () => {
                                 setPickerMsgId(null);
                                 setSaving((prev) => new Set(prev).add(msg.id));
-                                showBanner({ type: "success", message: `We're cooking the data — we'll let you know when it's ready` });
+                                showBanner({ type: "info", message: `We're cooking the data — we'll let you know when it's ready` });
                                 try {
                                   const res = await fetch("/api/recipe/submit", {
                                     method: "POST",
@@ -562,6 +562,9 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                                   if (res.ok) {
                                     setSaved((prev) => new Set(prev).add(msg.id));
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                    const nameMatch = msg.content.match(/^#\s+(.+)/m);
+                                    const recipeName = nameMatch ? nameMatch[1].trim() : "Recipe";
+                                    showBanner({ type: "success", message: `"${recipeName}" saved and ready to use` });
                                     onRecipeSaved?.();
                                   } else {
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
@@ -633,7 +636,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
       </div>
 
       <div className={`fixed bottom-4 left-4 right-4 z-50 transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
-        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : "bg-blue-500"}`}>
+        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : banner?.type === "success" ? "bg-green-primary" : "bg-blue-500"}`}>
           {banner?.message}
         </div>
       </div>
