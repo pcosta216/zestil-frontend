@@ -9,6 +9,7 @@ interface MealCard {
   day: string;
   name: string;
   time: string;
+  recipe_uuid?: string;
 }
 
 type AgentMessage = {
@@ -360,15 +361,25 @@ export function ExploreTab({ collections = [], onRecipeSaved }: { collections?: 
                                   setPickerMsgId(null);
                                   setSaving((prev) => new Set(prev).add(msg.id));
                                   try {
-                                    const res = await fetch("/api/recipe/submit", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({ text: msg.content }),
-                                    });
+                                    const recipeUuid = msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null;
+                                    const res = recipeUuid
+                                      ? await fetch("/api/recipe/link", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ recipe_uuid: recipeUuid }),
+                                        })
+                                      : await fetch("/api/recipe/submit", {
+                                          method: "POST",
+                                          headers: { "Content-Type": "application/json" },
+                                          body: JSON.stringify({ text: msg.content }),
+                                        });
                                     if (res.ok) {
                                       setSaved((prev) => new Set(prev).add(msg.id));
                                       setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
-                                      showBanner({ type: "success", message: `We're cooking the data — we'll let you know when it's ready` });
+                                      const banner = recipeUuid
+                                        ? "Recipe added to your collection!"
+                                        : "We're cooking the data — we'll let you know when it's ready";
+                                      showBanner({ type: "success", message: banner });
                                       onRecipeSaved?.();
                                     } else {
                                       setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });

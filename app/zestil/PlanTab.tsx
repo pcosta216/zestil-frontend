@@ -34,6 +34,7 @@ interface MealCard {
   notes?:             string | null;
   metadata:           Record<string, any>;
   meal_summary?:      { weekday?: string; kcal?: number; protein?: number; carbs?: number; fat?: number; sugar?: number; sodium?: number; [key: string]: unknown };
+  recipe_uuid?:       string;
 }
 
 type IngredientCard = string;
@@ -47,6 +48,7 @@ type AgentMessage = {
   ingredientCards?: IngredientCard[];
   changedDates?: string[];
   quickReplies?: string[];
+  metadata?: Record<string, any>;
 };
 
 type UserMessage = {
@@ -229,9 +231,13 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
       />
     );
   } else {
+    const imageUrl = rt === "recipe" ? (msg.metadata?.media?.image_url as string | undefined) : undefined;
     body = (
-      <div className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main" style={{ borderRadius: "4px 16px 16px 16px" }}>
-        <div className="chat-markdown"><Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown></div>
+      <div className="bg-white border border-[rgba(0,0,0,0.08)] overflow-hidden text-[13.5px] leading-relaxed text-text-main" style={{ borderRadius: "4px 16px 16px 16px" }}>
+        {imageUrl && (
+          <img src={imageUrl} alt="" className="w-full h-36 object-cover" />
+        )}
+        <div className="px-4 py-3 chat-markdown"><Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown></div>
       </div>
     );
   }
@@ -461,6 +467,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
         mealCards:       meal_cards?.length ? meal_cards : undefined,
         ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
         changedDates:    changed_dates?.length ? changed_dates : undefined,
+        metadata:        data.metadata ?? undefined,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -494,6 +501,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
           mealCards:      meal_cards?.length      ? meal_cards      : undefined,
           ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
           changedDates:   changed_dates?.length   ? changed_dates   : undefined,
+          metadata:       data.metadata ?? undefined,
         };
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
         setMessages([agentMsg, WELCOME_MESSAGE]);
@@ -584,17 +592,25 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                                 setSaving((prev) => new Set(prev).add(msg.id));
                                 showBanner({ type: "info", message: `We're cooking the data — we'll let you know when it's ready` });
                                 try {
-                                  const res = await fetch("/api/recipe/submit", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ text: msg.content }),
-                                  });
+                                  const recipeUuid = msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null;
+                                  const res = recipeUuid
+                                    ? await fetch("/api/recipe/link", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ recipe_uuid: recipeUuid }),
+                                      })
+                                    : await fetch("/api/recipe/submit", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ text: msg.content }),
+                                      });
                                   if (res.ok) {
                                     setSaved((prev) => new Set(prev).add(msg.id));
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
-                                    const nameMatch = msg.content.match(/^#\s+(.+)/m);
-                                    const recipeName = nameMatch ? nameMatch[1].trim() : "Recipe";
-                                    showBanner({ type: "success", message: `"${recipeName}" saved and ready to use` });
+                                    const banner = recipeUuid
+                                      ? "Recipe added to your collection!"
+                                      : "We're cooking the data — we'll let you know when it's ready";
+                                    showBanner({ type: "success", message: banner });
                                     onRecipeSaved?.();
                                   } else {
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
