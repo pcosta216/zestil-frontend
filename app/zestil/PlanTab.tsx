@@ -49,6 +49,7 @@ type AgentMessage = {
   changedDates?: string[];
   quickReplies?: string[];
   metadata?: Record<string, any>;
+  recipeUuid?: string;
 };
 
 type UserMessage = {
@@ -468,6 +469,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
         ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
         changedDates:    changed_dates?.length ? changed_dates : undefined,
         metadata:        data.metadata ?? undefined,
+        recipeUuid:      data.recipe_uuid,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -592,7 +594,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                                 setSaving((prev) => new Set(prev).add(msg.id));
                                 showBanner({ type: "info", message: `We're cooking the data — we'll let you know when it's ready` });
                                 try {
-                                  const recipeUuid = msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null;
+                                  const recipeUuid = msg.recipeUuid ?? (msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null);
                                   const res = recipeUuid
                                     ? await fetch("/api/recipe/link", {
                                         method: "POST",

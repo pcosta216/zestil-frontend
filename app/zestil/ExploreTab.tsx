@@ -20,6 +20,7 @@ type AgentMessage = {
   mealCards?: MealCard[];
   extraContent?: string;
   responseType?: string;
+  recipeUuid?: string;
 };
 
 type HistoryEntry = { role: "user" | "agent"; content: string };
@@ -227,7 +228,7 @@ export function ExploreTab({ collections = [], onRecipeSaved }: { collections?: 
 
       const data = await res.json();
       console.log("[LLM response]", data);
-      const { response, meal_cards, quick_replies, response_type } = data;
+      const { response, meal_cards, quick_replies, response_type, recipe_uuid } = data;
 
       const agentMsg: AgentMessage = {
         id:           `agent-${Date.now()}`,
@@ -235,6 +236,7 @@ export function ExploreTab({ collections = [], onRecipeSaved }: { collections?: 
         content:      response?.trim() || "Sorry, I couldn't generate a response.",
         mealCards:    meal_cards?.length ? meal_cards : undefined,
         responseType: response_type,
+        recipeUuid:   recipe_uuid,
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -361,7 +363,7 @@ export function ExploreTab({ collections = [], onRecipeSaved }: { collections?: 
                                   setPickerMsgId(null);
                                   setSaving((prev) => new Set(prev).add(msg.id));
                                   try {
-                                    const recipeUuid = msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null;
+                                    const recipeUuid = msg.recipeUuid ?? (msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null);
                                     const res = recipeUuid
                                       ? await fetch("/api/recipe/link", {
                                           method: "POST",
