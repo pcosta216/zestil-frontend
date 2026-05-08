@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const CHAT_FUNCTION_URL =
   process.env.CHAT_FUNCTION_URL ??
-  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/zestil-chat`;
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/explore-agent`;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

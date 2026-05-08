@@ -165,18 +165,30 @@ function TypingIndicator() {
   );
 }
 
-export function ExploreTab({ collections = [] }: { collections?: string[] }) {
+export function ExploreTab({ collections = [], onRecipeSaved }: { collections?: string[]; onRecipeSaved?: () => void }) {
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
   const [input, setInput] = useState("");
   const [quickReplies, setQuickReplies] = useState(QUICK_REPLIES);
   const [pickerMsgId, setPickerMsgId] = useState<string | null>(null);
-  const [checked, setChecked] = useState<Set<string>>(new Set());
-  const [hearted, setHearted] = useState<Set<string>>(new Set());
-  const chatRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const apiHistory = useRef<HistoryEntry[]>([]);
-  const sessionId = useRef(crypto.randomUUID());
+  const [checked,     setChecked]     = useState<Set<string>>(new Set());
+  const [hearted,     setHearted]     = useState<Set<string>>(new Set());
+  const [saving,      setSaving]      = useState<Set<string>>(new Set());
+  const [saved,       setSaved]       = useState<Set<string>>(new Set());
+  const [banner,      setBanner]      = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const chatRef       = useRef<HTMLDivElement>(null);
+  const textareaRef   = useRef<HTMLTextAreaElement>(null);
+  const apiHistory    = useRef<HistoryEntry[]>([]);
+  const sessionId     = useRef(crypto.randomUUID());
+  const bannerTimer   = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showBanner(b: { type: "success" | "error"; message: string }) {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner(b);
+    bannerTimer.current = setTimeout(() => setBanner(null), 5000);
+  }
+
+  useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
 
   useEffect(() => {
     if (chatRef.current) {
@@ -291,7 +303,9 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                       )}
                       <div className="relative">
                         <button
+                          disabled={saving.has(msg.id) || saved.has(msg.id)}
                           onClick={() => {
+                            if (saved.has(msg.id)) return;
                             setHearted((prev) => {
                               const next = new Set(prev);
                               next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id);
@@ -300,12 +314,17 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                             setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
                             setChecked(new Set());
                           }}
-                          className="transition-colors outline-none"
+                          className="transition-colors outline-none disabled:cursor-default"
                         >
                           <Heart
                             size={18}
                             strokeWidth={1.5}
-                            className={hearted.has(msg.id) ? "text-green-primary fill-green-primary" : "text-green-primary"}
+                            className={
+                              saved.has(msg.id)   ? "text-green-primary fill-green-primary"
+                              : saving.has(msg.id) ? "text-amber-400 fill-amber-400 animate-pulse"
+                              : hearted.has(msg.id) ? "text-amber-400 fill-amber-400"
+                              : "text-green-primary"
+                            }
                           />
                         </button>
                         {pickerMsgId === msg.id && (
@@ -336,10 +355,35 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
                             </div>
                             <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
                               <button
-                                onClick={() => setPickerMsgId(null)}
-                                className="w-full text-[11px] font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-1.5 transition-colors outline-none"
+                                disabled={saving.has(msg.id)}
+                                onClick={async () => {
+                                  setPickerMsgId(null);
+                                  setSaving((prev) => new Set(prev).add(msg.id));
+                                  try {
+                                    const res = await fetch("/api/recipe/submit", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ text: msg.content }),
+                                    });
+                                    if (res.ok) {
+                                      setSaved((prev) => new Set(prev).add(msg.id));
+                                      setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                      showBanner({ type: "success", message: `We're cooking the data — we'll let you know when it's ready` });
+                                      onRecipeSaved?.();
+                                    } else {
+                                      setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                      showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+                                    }
+                                  } catch {
+                                    setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                    showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+                                  } finally {
+                                    setSaving((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                  }
+                                }}
+                                className="w-full text-[11px] font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-1.5 transition-colors outline-none disabled:opacity-60"
                               >
-                                Save
+                                {saving.has(msg.id) ? "Saving…" : "Save"}
                               </button>
                             </div>
                           </div>
@@ -386,6 +430,13 @@ export function ExploreTab({ collections = [] }: { collections?: string[] }) {
             {qr}
           </button>
         ))}
+      </div>
+
+      {/* Banner — slides in from bottom */}
+      <div className={`fixed bottom-4 left-4 right-4 z-50 transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : "bg-blue-500"}`}>
+          {banner?.message}
+        </div>
       </div>
 
       <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">

@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const PLAN_FUNCTION_URL =
   process.env.PLAN_FUNCTION_URL ??
-  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/plan-agent`;
+  `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/zestil-agent`;
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

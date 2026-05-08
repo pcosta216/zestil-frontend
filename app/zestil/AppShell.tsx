@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
@@ -16,15 +16,23 @@ interface Props {
 }
 
 export function AppShell({ user, initialRecipes }: Props) {
-  const [activeTab, setActiveTab] = useState<Tab>("explore");
+  const [activeTab, setActiveTab]   = useState<Tab>("explore");
+  const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
 
   const collections = useMemo(() => {
     const seen = new Set<string>();
-    return initialRecipes
+    return recipes
       .map((r) => r.collections_short_desc)
       .filter((c): c is string => !!c && !seen.has(c) && !!seen.add(c))
       .sort((a, b) => a.localeCompare(b));
-  }, [initialRecipes]);
+  }, [recipes]);
+
+  const refreshRecipes = useCallback(async () => {
+    try {
+      const res = await fetch("/api/recipes");
+      if (res.ok) setRecipes(await res.json());
+    } catch { /* silent — stale data is acceptable */ }
+  }, []);
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
@@ -48,13 +56,13 @@ export function AppShell({ user, initialRecipes }: Props) {
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <PlanTab />
+          <PlanTab collections={collections} onRecipeSaved={refreshRecipes} />
         </div>
         <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <ExploreTab collections={collections} />
+          <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <SavedTab recipes={initialRecipes} />
+          <SavedTab recipes={recipes} />
         </div>
         <div className={["groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
           <span className="text-3xl">🌱</span>

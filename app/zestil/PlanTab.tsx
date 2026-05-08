@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { Heart } from "@/lib/icons";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 
@@ -12,6 +13,7 @@ type ResponseType =
   | "week_plan"
   | "day_update"
   | "recipe_list"
+  | "recipe"
   | "macro_summary"
   | "suggestion_pending"
   | "ingredients_list"
@@ -19,6 +21,7 @@ type ResponseType =
 
 interface MealCard {
   entry_id:           string;
+  entry_type?:        string;
   day:                string;
   date:               string;
   meal_slot:          string;
@@ -349,19 +352,35 @@ const INITIAL_MESSAGES: Message[] = [
 
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
-export function PlanTab() {
+export function PlanTab({ collections = [], onRecipeSaved }: { collections?: string[]; onRecipeSaved?: () => void }) {
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
   const [input, setInput]               = useState("");
   const [quickReplies, setQuickReplies] = useState(DEFAULT_QUICK_REPLIES);
   const [macroGoals, setMacroGoals]     = useState<MacroData | null>(null);
   const [mealSlots, setMealSlots]       = useState<string[]>([]);
+  const [pickerMsgId,    setPickerMsgId]    = useState<string | null>(null);
+  const [checked,        setChecked]        = useState<Set<string>>(new Set());
+  const [hearted,        setHearted]        = useState<Set<string>>(new Set());
+  const [saving,         setSaving]         = useState<Set<string>>(new Set());
+  const [saved,          setSaved]          = useState<Set<string>>(new Set());
+  const [selectedSlots,  setSelectedSlots]  = useState<Map<string, string>>(new Map());
+  const [banner,         setBanner]         = useState<{ type: "success" | "error"; message: string } | null>(null);
   const chatRef                         = useRef<HTMLDivElement>(null);
   const textareaRef                     = useRef<HTMLTextAreaElement>(null);
   const apiHistory                      = useRef<HistoryEntry[]>([]);
   const sessionId                       = useRef(crypto.randomUUID());
   const activeDate                      = useRef<string | null>(null);
-  const weekStartDay                    = useRef<number>(0); // 0 = Sunday, 1 = Monday
+  const weekStartDay                    = useRef<number>(0);
+  const bannerTimer                     = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showBanner(b: { type: "success" | "error"; message: string }) {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner(b);
+    bannerTimer.current = setTimeout(() => setBanner(null), 5000);
+  }
+
+  useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
 
   useEffect(() => {
     fetch("/api/goals")
@@ -474,6 +493,120 @@ export function PlanTab() {
           ) : (
             <React.Fragment key={msg.id}>
               <AgentBubble msg={msg} onSend={sendMessage} />
+              {msg.responseType === "recipe" && (
+                <>
+                  {pickerMsgId === msg.id && (
+                    <div className="fixed inset-0 z-[9]" onClick={() => {
+                      setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                      setPickerMsgId(null);
+                    }} />
+                  )}
+                  <div className="ml-[38px] flex items-center justify-between gap-2">
+                    <div className="relative">
+                      <button
+                        disabled={saving.has(msg.id) || saved.has(msg.id)}
+                        onClick={() => {
+                          if (saved.has(msg.id)) return;
+                          setHearted((prev) => { const next = new Set(prev); next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id); return next; });
+                          setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
+                          setChecked(new Set());
+                        }}
+                        className="transition-colors outline-none disabled:cursor-default"
+                      >
+                        <Heart
+                          size={18}
+                          strokeWidth={1.5}
+                          className={
+                            saved.has(msg.id)     ? "text-green-primary fill-green-primary"
+                            : saving.has(msg.id)  ? "text-amber-400 fill-amber-400 animate-pulse"
+                            : hearted.has(msg.id) ? "text-amber-400 fill-amber-400"
+                            : "text-green-primary"
+                          }
+                        />
+                      </button>
+                      {pickerMsgId === msg.id && (
+                        <div className="absolute bottom-full mb-1.5 left-0 bg-white/50 backdrop-blur-sm border border-[rgba(0,0,0,0.07)] rounded-2xl shadow-xl w-48 z-10 flex flex-col max-h-[60vh]">
+                          <div className="px-3 py-2 border-b border-[rgba(0,0,0,0.06)] flex-shrink-0">
+                            <span className="text-[11px] font-medium text-text-muted uppercase tracking-wide">Collections</span>
+                          </div>
+                          <div className="flex-1 overflow-y-auto py-1">
+                            {collections.length === 0 ? (
+                              <p className="text-[12px] text-text-muted px-3 py-2">No collections yet</p>
+                            ) : (
+                              collections.map((name) => (
+                                <label key={name} className="flex items-center gap-2.5 px-3 py-2 hover:bg-warm cursor-pointer">
+                                  <input
+                                    type="checkbox"
+                                    checked={checked.has(name)}
+                                    onChange={() => setChecked((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; })}
+                                    className="accent-green-primary w-3.5 h-3.5"
+                                  />
+                                  <span className="text-[12px] text-text-main">{name}</span>
+                                </label>
+                              ))
+                            )}
+                          </div>
+                          <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
+                            <button
+                              disabled={saving.has(msg.id)}
+                              onClick={async () => {
+                                setPickerMsgId(null);
+                                setSaving((prev) => new Set(prev).add(msg.id));
+                                showBanner({ type: "success", message: `We're cooking the data — we'll let you know when it's ready` });
+                                try {
+                                  const res = await fetch("/api/recipe/submit", {
+                                    method: "POST",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ text: msg.content }),
+                                  });
+                                  if (res.ok) {
+                                    setSaved((prev) => new Set(prev).add(msg.id));
+                                    setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                    onRecipeSaved?.();
+                                  } else {
+                                    setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                    showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+                                  }
+                                } catch {
+                                  setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                  showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+                                } finally {
+                                  setSaving((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                }
+                              }}
+                              className="w-full text-[11px] font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-1.5 transition-colors outline-none disabled:opacity-60"
+                            >
+                              {saving.has(msg.id) ? "Saving…" : "Save"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 ml-auto">
+                      {["+ Dinner", "+ Lunch", "+ Snack"].map((label) => {
+                        const isSelected = selectedSlots.get(msg.id) === label;
+                        return (
+                          <button
+                            key={label}
+                            onClick={() => setSelectedSlots((prev) => {
+                              const next = new Map(prev);
+                              next.set(msg.id, isSelected ? "" : label);
+                              return next;
+                            })}
+                            className={`text-[11px] font-medium rounded-full px-2.5 py-1 transition-colors outline-none whitespace-nowrap border ${
+                              isSelected
+                                ? "text-green-primary bg-green-light border-green-border"
+                                : "text-text-muted bg-white border-[rgba(0,0,0,0.08)] hover:text-green-primary hover:border-green-border"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
               {(msg.mealCards?.length ?? 0) > 0 && (
                 <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} />
               )}
@@ -497,6 +630,12 @@ export function PlanTab() {
             {qr}
           </button>
         ))}
+      </div>
+
+      <div className={`fixed bottom-4 left-4 right-4 z-50 transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : "bg-blue-500"}`}>
+          {banner?.message}
+        </div>
       </div>
 
       <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
