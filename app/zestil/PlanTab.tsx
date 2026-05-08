@@ -341,14 +341,14 @@ function IngredientList({ cards, onSend }: { cards: IngredientCard[]; onSend: (t
 
 // ── PlanTab ───────────────────────────────────────────────────────────────────
 
-const INITIAL_MESSAGES: Message[] = [
-  {
-    id: "welcome",
-    type: "agent",
-    responseType: "info",
-    content: "Hi! I'm your meal planner. Ask me to show your week, add a recipe, or adjust a day's macros.",
-  },
-];
+const INITIAL_MESSAGES: Message[] = [];
+
+const WELCOME_MESSAGE: AgentMessage = {
+  id:           "welcome",
+  type:         "agent",
+  responseType: "info",
+  content:      "Hi! I'm your meal planner. Ask me to show your week, add a recipe, or adjust a day's macros.",
+};
 
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
@@ -474,6 +474,36 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
     }
   }, [isTyping]);
 
+  useEffect(() => {
+    const text = "Show my plan for today";
+    setIsTyping(true);
+    apiHistory.current.push({ role: "user", content: text });
+    fetch("/api/plan", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ message: text, session_id: sessionId.current, history: [], active_date: activeDate.current, week_start_day: weekStartDay.current }),
+    })
+      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+      .then((data) => {
+        const { response, response_type, meal_cards, ingredient_cards, quick_replies, changed_dates } = data;
+        const agentMsg: AgentMessage = {
+          id:             `agent-${Date.now()}`,
+          type:           "agent",
+          content:        response?.trim() || "",
+          responseType:   (response_type as ResponseType) ?? "info",
+          mealCards:      meal_cards?.length      ? meal_cards      : undefined,
+          ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
+          changedDates:   changed_dates?.length   ? changed_dates   : undefined,
+        };
+        apiHistory.current.push({ role: "agent", content: agentMsg.content });
+        setMessages([agentMsg, WELCOME_MESSAGE]);
+        if (quick_replies?.length) setQuickReplies(quick_replies);
+      })
+      .catch(() => setMessages([WELCOME_MESSAGE]))
+      .finally(() => setIsTyping(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <>
       <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-3.5">
@@ -492,7 +522,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
             </div>
           ) : (
             <React.Fragment key={msg.id}>
-              <AgentBubble msg={msg} onSend={sendMessage} />
+              {!(msg.mealCards?.length) && <AgentBubble msg={msg} onSend={sendMessage} />}
               {msg.responseType === "recipe" && (
                 <>
                   {pickerMsgId === msg.id && (
