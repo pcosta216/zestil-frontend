@@ -474,9 +474,14 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
       };
 
       setMessages((prev) => [...prev, agentMsg]);
-      apiHistory.current.push({ role: "agent", content: agentMsg.content });
+      if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
+        apiHistory.current.push({ role: "agent", content: agentMsg.content });
+      } else {
+        apiHistory.current.pop(); // remove failed user message — don't poison history
+      }
       if (quick_replies?.length) setQuickReplies(quick_replies);
     } catch (err) {
+      apiHistory.current.pop(); // remove the user message that got no real response
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       setMessages((prev) => [...prev, { id: `err-${Date.now()}`, type: "agent", responseType: "info", content: `Error: ${msg}` }]);
     } finally {
@@ -499,18 +504,27 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         const agentMsg: AgentMessage = {
           id:             `agent-${Date.now()}`,
           type:           "agent",
-          content:        response?.trim() || "",
+          content:        response?.trim() || "Here's your plan for today.",
           responseType:   (response_type as ResponseType) ?? "info",
           mealCards:      meal_cards?.length      ? meal_cards      : undefined,
           ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
           changedDates:   changed_dates?.length   ? changed_dates   : undefined,
           metadata:       data.metadata ?? undefined,
         };
-        apiHistory.current.push({ role: "agent", content: agentMsg.content });
-        setMessages([agentMsg, WELCOME_MESSAGE]);
-        if (quick_replies?.length) setQuickReplies(quick_replies);
+        const isErrorResponse = !response?.trim() || response.trim() === 'Sorry, I could not generate a response.';
+        if (isErrorResponse) {
+          apiHistory.current.pop(); // remove the failed "Show my plan" user message
+          setMessages([WELCOME_MESSAGE]);
+        } else {
+          apiHistory.current.push({ role: "agent", content: agentMsg.content });
+          setMessages([agentMsg, WELCOME_MESSAGE]);
+          if (quick_replies?.length) setQuickReplies(quick_replies);
+        }
       })
-      .catch(() => setMessages([WELCOME_MESSAGE]))
+      .catch(() => {
+        apiHistory.current.pop(); // remove the failed "Show my plan" user message
+        setMessages([WELCOME_MESSAGE]);
+      })
       .finally(() => setIsTyping(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
