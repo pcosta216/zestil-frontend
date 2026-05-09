@@ -20,6 +20,21 @@ export type RecipeCollection = {
   collections_short_desc: string | null;
 };
 
+export type Collection = { id: number; name: string };
+
+export async function getCollections(userId: string): Promise<Collection[]> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tbl_collections_set_header")
+    .select("id, collections_short_desc")
+    .eq("account_key", userId)
+    .eq("status", 1710)
+    .order("collections_short_desc", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ id: r.id as number, name: r.collections_short_desc as string }));
+}
+
 export async function getRecipes(userId: string): Promise<RecipeCollection[]> {
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -29,13 +44,7 @@ export async function getRecipes(userId: string): Promise<RecipeCollection[]> {
     .order("meal_title", { ascending: true });
 
   if (error) throw error;
-  const rows = data ?? [];
-  const seen = new Set<string>();
-  return rows.filter((r) => {
-    if (seen.has(r.recipe_uuid)) return false;
-    seen.add(r.recipe_uuid);
-    return true;
-  });
+  return data ?? [];
 }
 
 export async function getImagePlaceholder(): Promise<string | null> {

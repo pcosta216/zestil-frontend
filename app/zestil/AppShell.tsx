@@ -1,31 +1,25 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useCallback } from "react";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
 import SignOutButton from "./SignOutButton";
 import { InstallBanner } from "@/components/InstallBanner";
-import type { RecipeCollection } from "@/lib/supabase/queries";
+import type { RecipeCollection, Collection } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
 
 interface Props {
   user: { id: string; email: string; initials: string };
   initialRecipes: RecipeCollection[];
+  initialCollections: Collection[];
 }
 
-export function AppShell({ user, initialRecipes }: Props) {
+export function AppShell({ user, initialRecipes, initialCollections }: Props) {
   const [activeTab, setActiveTab]   = useState<Tab>("explore");
   const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
-
-  const collections = useMemo(() => {
-    const seen = new Set<string>();
-    return recipes
-      .map((r) => r.collections_short_desc)
-      .filter((c): c is string => !!c && !seen.has(c) && !!seen.add(c))
-      .sort((a, b) => a.localeCompare(b));
-  }, [recipes]);
+  const collections = initialCollections;
 
   const refreshRecipes = useCallback(async () => {
     try {

@@ -359,7 +359,8 @@ const WELCOME_MESSAGE: AgentMessage = {
 
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
-export function PlanTab({ collections = [], onRecipeSaved }: { collections?: string[]; onRecipeSaved?: () => void }) {
+export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
+  const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
   const [input, setInput]               = useState("");
@@ -367,7 +368,7 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
   const [macroGoals, setMacroGoals]     = useState<MacroData | null>(null);
   const [mealSlots, setMealSlots]       = useState<string[]>([]);
   const [pickerMsgId,    setPickerMsgId]    = useState<string | null>(null);
-  const [checked,        setChecked]        = useState<Set<string>>(new Set());
+  const [checked,        setChecked]        = useState<Set<number>>(new Set());
   const [hearted,        setHearted]        = useState<Set<string>>(new Set());
   const [saving,         setSaving]         = useState<Set<string>>(new Set());
   const [saved,          setSaved]          = useState<Set<string>>(new Set());
@@ -573,15 +574,15 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                             {collections.length === 0 ? (
                               <p className="text-[12px] text-text-muted px-3 py-2">No collections yet</p>
                             ) : (
-                              collections.map((name) => (
-                                <label key={name} className="flex items-center gap-2.5 px-3 py-2 hover:bg-warm cursor-pointer">
+                              collections.map((col) => (
+                                <label key={col.id} className="flex items-center gap-2.5 px-3 py-2 hover:bg-warm cursor-pointer">
                                   <input
                                     type="checkbox"
-                                    checked={checked.has(name)}
-                                    onChange={() => setChecked((prev) => { const next = new Set(prev); next.has(name) ? next.delete(name) : next.add(name); return next; })}
+                                    checked={checked.has(col.id)}
+                                    onChange={() => setChecked((prev) => { const next = new Set(prev); next.has(col.id) ? next.delete(col.id) : next.add(col.id); return next; })}
                                     className="accent-green-primary w-3.5 h-3.5"
                                   />
-                                  <span className="text-[12px] text-text-main">{name}</span>
+                                  <span className="text-[12px] text-text-main">{col.name}</span>
                                 </label>
                               ))
                             )}
@@ -592,32 +593,38 @@ export function PlanTab({ collections = [], onRecipeSaved }: { collections?: str
                               onClick={async () => {
                                 setPickerMsgId(null);
                                 setSaving((prev) => new Set(prev).add(msg.id));
-                                showBanner({ type: "info", message: `We're cooking the data — we'll let you know when it's ready` });
+                                showBanner({ type: "info", message: "We're cooking the data — we'll let you know when it's ready" });
                                 try {
                                   const recipeUuid = msg.recipeUuid ?? (msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null);
-                                  const res = recipeUuid
-                                    ? await fetch("/api/recipe/link", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ recipe_uuid: recipeUuid }),
-                                      })
-                                    : await fetch("/api/recipe/submit", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ text: msg.content }),
-                                      });
-                                  if (res.ok) {
-                                    setSaved((prev) => new Set(prev).add(msg.id));
-                                    setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
-                                    const banner = recipeUuid
-                                      ? "Recipe added to your collection!"
-                                      : "We're cooking the data — we'll let you know when it's ready";
-                                    showBanner({ type: "success", message: banner });
-                                    onRecipeSaved?.();
+                                  let savedUuid: string | null = recipeUuid ?? null;
+                                  if (recipeUuid) {
+                                    const res = await fetch("/api/recipe/link", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ recipe_uuid: recipeUuid }),
+                                    });
+                                    if (!res.ok) throw new Error("link failed");
                                   } else {
-                                    setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
-                                    showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+                                    const res = await fetch("/api/recipe/submit", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ text: msg.content }),
+                                    });
+                                    if (!res.ok) throw new Error("submit failed");
+                                    const data = await res.json();
+                                    savedUuid = data.recipe_uuid ?? null;
                                   }
+                                  if (checked.size > 0 && savedUuid) {
+                                    await fetch("/api/recipe/collections", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ recipe_uuid: savedUuid, collection_ids: Array.from(checked) }),
+                                    });
+                                  }
+                                  setSaved((prev) => new Set(prev).add(msg.id));
+                                  setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
+                                  showBanner({ type: "success", message: recipeUuid ?  "We're cooking the data — we'll let you know when it's ready" : "Recipe added to your collection!"});
+                                  onRecipeSaved?.();
                                 } catch {
                                   setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
                                   showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });

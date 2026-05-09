@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRecipes } from "@/lib/supabase/queries";
+import { getRecipes, getCollections } from "@/lib/supabase/queries";
 import { AppShell } from "./AppShell";
 
 export default async function RecipesPage() {
@@ -11,8 +11,9 @@ export default async function RecipesPage() {
 
   if (!user) redirect("/login");
 
-  const [recipes] = await Promise.all([
+  const [recipes, collections] = await Promise.all([
     getRecipes(user.id),
+    getCollections(user.id).catch((e) => { console.error("[getCollections] failed:", e?.message); return []; }),
   ]);
   const initials = user.email?.slice(0, 2).toUpperCase() ?? "??";
 
@@ -20,6 +21,7 @@ export default async function RecipesPage() {
     <AppShell
       user={{ id: user.id, email: user.email ?? "", initials }}
       initialRecipes={recipes}
+      initialCollections={collections}
     />
   );
 }

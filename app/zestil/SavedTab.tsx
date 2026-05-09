@@ -20,18 +20,24 @@ export function SavedTab({ recipes }: Props) {
     const seen = new Set<string>();
     return recipes
       .map((r) => r.collections_short_desc)
-      .filter((c): c is string => !!c && !seen.has(c) && !!seen.add(c))
+      .filter((c): c is string => !!c && c.toLowerCase() !== "main" && !seen.has(c) && !!seen.add(c))
       .sort((a, b) => a.localeCompare(b));
   }, [recipes]);
 
-  const displayed = useMemo(() => recipes.filter((r) => {
-    if (selected && r.collections_short_desc !== selected) return false;
+  const displayed = useMemo(() => {
+    let filtered = recipes;
+    if (selected) filtered = filtered.filter((r) => r.collections_short_desc === selected);
     if (query.trim()) {
       const q = query.toLowerCase();
-      return r.meal_title?.toLowerCase().includes(q) ?? false;
+      filtered = filtered.filter((r) => r.meal_title?.toLowerCase().includes(q) ?? false);
     }
-    return true;
-  }), [recipes, selected, query]);
+    const seen = new Set<string>();
+    return filtered.filter((r) => {
+      if (seen.has(r.recipe_uuid)) return false;
+      seen.add(r.recipe_uuid);
+      return true;
+    });
+  }, [recipes, selected, query]);
 
   const updateThumb = useCallback(() => {
     const el = scrollRef.current;
