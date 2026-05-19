@@ -277,9 +277,14 @@ function groupByDay(cards: MealCard[]) {
 
 function DayGrids({ cards, goals, mealSlots, onSend, onDeleteEntry }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onSend: (text: string) => void; onDeleteEntry?: (entryId: string) => void }) {
   const groups = groupByDay(cards);
+  const sortedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
+    const dateA = a.find(c => c.date)?.date ?? "";
+    const dateB = b.find(c => c.date)?.date ?? "";
+    return dateA.localeCompare(dateB);
+  });
   return (
     <div className="flex flex-col gap-2 -mx-2">
-      {Array.from(groups.entries()).map(([weekday, dayCards]) => {
+      {sortedGroups.map(([weekday, dayCards]) => {
         const isEmpty = dayCards.every((c) => c.entry_type === "empty");
         const realCards = isEmpty ? [] : dayCards.filter((c) => c.entry_type !== "empty");
         const sorted = !isEmpty && mealSlots.length
