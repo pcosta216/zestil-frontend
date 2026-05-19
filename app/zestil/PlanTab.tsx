@@ -315,7 +315,8 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
                   title={card.name}
                   subtitle={card.meal_slot}
                   kcal={card.macros?.kcal}
-                  servings_value={card.metadata?.metadata?.servings_value}
+                  servings_value={card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value}
+                  serving_multiplier={card.serving_multiplier}
                   protein={card.macros?.protein}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
                   hasNotes={!!card.notes}

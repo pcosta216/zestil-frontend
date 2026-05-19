@@ -4,22 +4,24 @@ import { useState } from "react";
 import { Trash2, CircleEllipsis, Plus, Info } from "@/lib/icons";
 
 interface Props {
-  title:           string;
-  subtitle?:       string;
-  kcal?:           number;
-  protein?:        number;
-  servings_value?: number;
-  hasSuggestion?:  boolean;
-  hasNotes?:       boolean;
-  cardVariant?:    "recipe" | "ingredient";
-  onMore?:         () => void;
-  onAdd?:          () => void;
-  onDelete?:       () => void;
-  onInfo?:         () => void;
+  title:              string;
+  subtitle?:          string;
+  kcal?:              number;
+  protein?:           number;
+  servings_value?:    number;
+  serving_multiplier?: number;
+  hasSuggestion?:     boolean;
+  hasNotes?:          boolean;
+  cardVariant?:       "recipe" | "ingredient";
+  onMore?:            () => void;
+  onAdd?:             () => void;
+  onDelete?:          () => void;
+  onInfo?:            () => void;
 }
 
 export function WeekdayRecipeCard({
   title, subtitle, kcal, hasSuggestion,
+  servings_value, serving_multiplier,
   cardVariant = "recipe", onMore, onAdd, onDelete, onInfo,
 }: Props) {
   const [barOpen, setBarOpen] = useState(false);
@@ -62,6 +64,16 @@ export function WeekdayRecipeCard({
               suggestion
             </span>
           </div>
+        )}
+
+        {/* serving multiplier badge */}
+        {serving_multiplier != null && servings_value != null && (
+          <span className="ml-1.5 flex-shrink-0 flex items-center gap-0.5 whitespace-nowrap">
+            <span className="w-4 h-4 bg-yellow-400 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
+              {serving_multiplier} 
+            </span>
+            <span className="text-[8px] font-bold text-text-muted">{servings_value}</span>
+          </span>
         )}
 
         {/* kcal — always visible */}
