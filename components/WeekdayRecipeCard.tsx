@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Trash2, CircleEllipsis, Plus, Info } from "@/lib/icons";
+import { ServingInfo } from "./serving_info";
 
 interface Props {
   title:              string;
@@ -68,11 +69,8 @@ export function WeekdayRecipeCard({
 
         {/* serving multiplier badge */}
         {serving_multiplier != null && servings_value != null && (
-          <span className="ml-1.5 flex-shrink-0 flex items-center gap-0.5 whitespace-nowrap">
-            <span className="w-4 h-4 bg-yellow-400 rounded-full text-[10px] font-bold text-white flex items-center justify-center leading-none">
-              {serving_multiplier} 
-            </span>
-            <span className="text-[8px] font-bold text-text-muted">{servings_value}</span>
+          <span className="ml-1.0 flex-shrink-0">
+            <ServingInfo servingMultiplier={serving_multiplier} servingsValue={servings_value} />
           </span>
         )}
 
