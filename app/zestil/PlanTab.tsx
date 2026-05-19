@@ -390,6 +390,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const activeDate                      = useRef<string | null>(null);
   const weekStartDay                    = useRef<number>(0);
   const bannerTimer                     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipNextScroll                  = useRef(false);
 
   function showBanner(b: { type: "success" | "info" | "error"; message: string }) {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
@@ -414,6 +415,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   }, []);
 
   useEffect(() => {
+    if (skipNextScroll.current) { skipNextScroll.current = false; return; }
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, isTyping]);
 
@@ -523,6 +525,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const handleDeleteEntry = useCallback(async (entryId: string) => {
     const res = await fetch(`/api/plan/entries/${entryId}`, { method: "DELETE" });
     if (res.ok) {
+      skipNextScroll.current = true;
       setTodayCards(prev => {
         const removed = prev.find(c => c.entry_id === entryId);
         const rest    = prev.filter(c => c.entry_id !== entryId);
