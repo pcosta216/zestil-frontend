@@ -377,6 +377,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const chatRef                         = useRef<HTMLDivElement>(null);
   const textareaRef                     = useRef<HTMLTextAreaElement>(null);
   const apiHistory                      = useRef<HistoryEntry[]>([]);
+  const plannerHistory                  = useRef<HistoryEntry[]>([]);
+  const exploreHistory                  = useRef<HistoryEntry[]>([]);
   const sessionId                       = useRef(crypto.randomUUID());
   const activeDate                      = useRef<string | null>(null);
   const weekStartDay                    = useRef<number>(0);
@@ -417,7 +419,9 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     if (textareaRef.current) textareaRef.current.style.height = "auto";
     setIsTyping(true);
 
-    const historySnapshot = [...apiHistory.current];
+    const historySnapshot  = [...apiHistory.current];
+    const plannerSnapshot  = [...plannerHistory.current];
+    const exploreSnapshot  = [...exploreHistory.current];
     apiHistory.current.push({ role: "user", content: text });
 
     console.log(`[plan] sending message: "${text.slice(0, 80)}" active_date=${activeDate.current}`)
@@ -432,11 +436,13 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message:        text,
-          session_id:     sessionId.current,
-          history:        historySnapshot,
-          active_date:    activeDate.current,
-          week_start_day: weekStartDay.current,
+          message:         text,
+          session_id:      sessionId.current,
+          history:         historySnapshot,
+          planner_history: plannerSnapshot,
+          explore_history: exploreSnapshot,
+          active_date:     activeDate.current,
+          week_start_day:  weekStartDay.current,
         }),
       });
 
@@ -476,6 +482,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
       setMessages((prev) => [...prev, agentMsg]);
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
+        const routedTo = (data._router?.routed_to as string) ?? ''
+        const agentTrack = routedTo.includes('explore') ? exploreHistory : plannerHistory
+        agentTrack.current.push({ role: "user",  content: text })
+        agentTrack.current.push({ role: "agent", content: agentMsg.content })
       } else {
         apiHistory.current.pop(); // remove failed user message — don't poison history
       }
@@ -517,6 +527,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
           setMessages([WELCOME_MESSAGE]);
         } else {
           apiHistory.current.push({ role: "agent", content: agentMsg.content });
+          plannerHistory.current.push({ role: "user",  content: text });
+          plannerHistory.current.push({ role: "agent", content: agentMsg.content });
           setMessages([agentMsg, WELCOME_MESSAGE]);
           if (quick_replies?.length) setQuickReplies(quick_replies);
         }

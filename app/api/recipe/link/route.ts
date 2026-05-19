@@ -22,6 +22,9 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
     const data = await res.json();
+    if (!res.ok) {
+      console.error("[recipe/link] Flask error:", res.status, JSON.stringify(data));
+    }
     return NextResponse.json(data, { status: res.ok ? 200 : res.status });
   } catch (err) {
     console.error("[recipe/link] fetch error:", err);
