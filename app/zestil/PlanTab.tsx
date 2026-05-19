@@ -275,7 +275,7 @@ function groupByDay(cards: MealCard[]) {
   return groups;
 }
 
-function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onSend: (text: string) => void }) {
+function DayGrids({ cards, goals, mealSlots, onSend, onDeleteEntry }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onSend: (text: string) => void; onDeleteEntry?: (entryId: string) => void }) {
   const groups = groupByDay(cards);
   return (
     <div className="flex flex-col gap-2 -mx-2">
@@ -315,13 +315,13 @@ function DayGrids({ cards, goals, mealSlots, onSend }: { cards: MealCard[]; goal
                   title={card.name}
                   subtitle={card.meal_slot}
                   kcal={card.macros?.kcal}
-                  servings_value={card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value}
+                  servings_value={card.entry_type === 'ingredient' ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
                   protein={card.macros?.protein}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
                   hasNotes={!!card.notes}
                   onMore={() => onSend(`Tell me more about "${card.name}"`)}
-                  onDelete={() => onSend(`Remove "${card.name}" from my ${weekday} plan`)}
+                  onDelete={() => onDeleteEntry?.(card.entry_id)}
                 />
               ))
             )}
@@ -362,6 +362,7 @@ const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How 
 
 export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
+  const [todayCards, setTodayCards]     = useState<MealCard[]>([]);
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
   const [input, setInput]               = useState("");
@@ -501,46 +502,45 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   }, [isTyping]);
 
   useEffect(() => {
-    const text = "Show my plan for today";
-    setIsTyping(true);
-    apiHistory.current.push({ role: "user", content: text });
-    fetch("/api/plan", {
-      method:  "POST",
-      headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ message: text, session_id: sessionId.current, history: [], active_date: activeDate.current, week_start_day: weekStartDay.current }),
-    })
-      .then((r) => r.ok ? r.json() : Promise.reject(r.status))
+    fetch("/api/plan/today")
+      .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        const { response, response_type, meal_cards, ingredient_cards, quick_replies, changed_dates } = data;
-        const agentMsg: AgentMessage = {
-          id:             `agent-${Date.now()}`,
-          type:           "agent",
-          content:        response?.trim() || "Here's your plan for today.",
-          responseType:   (response_type as ResponseType) ?? "info",
-          mealCards:      meal_cards?.length      ? meal_cards      : undefined,
-          ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
-          changedDates:   changed_dates?.length   ? changed_dates   : undefined,
-          metadata:       data.metadata ?? undefined,
-        };
-        const isErrorResponse = !response?.trim() || response.trim() === 'Sorry, I could not generate a response.';
-        if (isErrorResponse) {
-          apiHistory.current.pop(); // remove the failed "Show my plan" user message
-          setMessages([WELCOME_MESSAGE]);
-        } else {
-          apiHistory.current.push({ role: "agent", content: agentMsg.content });
-          plannerHistory.current.push({ role: "user",  content: text });
-          plannerHistory.current.push({ role: "agent", content: agentMsg.content });
-          setMessages([agentMsg, WELCOME_MESSAGE]);
-          if (quick_replies?.length) setQuickReplies(quick_replies);
+        if (data?.entries?.length) {
+          setTodayCards(data.entries);
+          activeDate.current = data.date;
         }
-      })
-      .catch(() => {
-        apiHistory.current.pop(); // remove the failed "Show my plan" user message
         setMessages([WELCOME_MESSAGE]);
       })
-      .finally(() => setIsTyping(false));
+      .catch(() => setMessages([WELCOME_MESSAGE]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleDeleteEntry = useCallback(async (entryId: string) => {
+    const res = await fetch(`/api/plan/entries/${entryId}`, { method: "DELETE" });
+    if (res.ok) {
+      setTodayCards(prev => {
+        const removed = prev.find(c => c.entry_id === entryId);
+        const rest    = prev.filter(c => c.entry_id !== entryId);
+        if (removed && !rest.some(c => c.date === removed.date)) {
+          return [...rest, { ...removed, entry_type: "empty" }];
+        }
+        return rest;
+      });
+      setMessages(prev => prev.map(msg => {
+        if (msg.type !== "agent") return msg;
+        const cards   = (msg as AgentMessage).mealCards;
+        if (!cards)   return msg;
+        const removed = cards.find(c => c.entry_id === entryId);
+        const rest    = cards.filter(c => c.entry_id !== entryId);
+        const next    = removed && !rest.some(c => c.date === removed.date)
+          ? [...rest, { ...removed, entry_type: "empty" }]
+          : rest;
+        return { ...msg, mealCards: next };
+      }));
+    } else {
+      showBanner({ type: "error", message: "Couldn't delete the entry. Please try again." });
+    }
+  }, [showBanner]);
 
   return (
     <>
@@ -548,6 +548,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         <div className="text-[11px] font-medium text-text-muted uppercase tracking-wide text-center my-1">
           Today
         </div>
+
+        {todayCards.length > 0 && (
+          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} onDeleteEntry={handleDeleteEntry} />
+        )}
 
         {messages.map((msg) =>
           msg.type === "user" ? (
@@ -693,7 +697,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                 </>
               )}
               {(msg.mealCards?.length ?? 0) > 0 && (
-                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} />
+                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} onDeleteEntry={handleDeleteEntry} />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
