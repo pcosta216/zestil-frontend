@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getRecipes, getCollections } from "@/lib/supabase/queries";
@@ -18,10 +19,12 @@ export default async function RecipesPage() {
   const initials = user.email?.slice(0, 2).toUpperCase() ?? "??";
 
   return (
-    <AppShell
-      user={{ id: user.id, email: user.email ?? "", initials }}
-      initialRecipes={recipes}
-      initialCollections={collections}
-    />
+    <Suspense>
+      <AppShell
+        user={{ id: user.id, email: user.email ?? "", initials }}
+        initialRecipes={recipes}
+        initialCollections={collections}
+      />
+    </Suspense>
   );
 }

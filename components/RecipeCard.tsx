@@ -4,7 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { ImageOff } from "@/lib/icons";
+import { ImageOff, CircleEllipsis } from "@/lib/icons";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 
 function isValidUrl(url: string): boolean {
@@ -32,7 +32,7 @@ export function RecipeCard({ recipe }: Props) {
       transition={{ duration: 0.25 }}
     >
       <Link href={`/zestil/${recipe.recipe_uuid}`}>
-        <div className="bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden hover:border-green-border transition-colors cursor-pointer group h-48">
+        <div className="relative bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden hover:border-green-border transition-colors cursor-pointer group h-48">
           {/* Photo */}
           <div className="w-full h-28 bg-green-light flex items-center justify-center overflow-hidden">
             {imageSrc ? (

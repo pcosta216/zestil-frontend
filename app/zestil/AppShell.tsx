@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
@@ -17,7 +18,13 @@ interface Props {
 }
 
 export function AppShell({ user, initialRecipes, initialCollections }: Props) {
-  const [activeTab, setActiveTab]   = useState<Tab>("explore");
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const activeTab = (searchParams.get("tab") as Tab) ?? "explore";
+  const setActiveTab = useCallback((tab: Tab) => {
+    router.replace(`/zestil?tab=${tab}`, { scroll: false });
+  }, [router]);
+
   const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
   const collections = initialCollections;
 

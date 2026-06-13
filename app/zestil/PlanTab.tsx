@@ -489,6 +489,17 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
       };
 
       setMessages((prev) => [...prev, agentMsg]);
+
+      // Refresh the Today section if the agent touched today's date
+      const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+      const touchedToday = (changed_dates ?? []).includes(todayStr) ||
+        (meal_cards ?? []).some((c: MealCard) => c.date === todayStr);
+      if (touchedToday) {
+        fetch("/api/plan/today")
+          .then((r) => r.ok ? r.json() : null)
+          .then((d) => { if (d?.entries?.length) setTodayCards(d.entries); })
+          .catch(() => {});
+      }
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
         const routedTo = (data._router?.routed_to as string) ?? ''
@@ -512,9 +523,14 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     fetch("/api/plan/today")
       .then((r) => r.ok ? r.json() : null)
       .then((data) => {
-        if (data?.entries?.length) {
-          setTodayCards(data.entries);
+        if (data?.date) {
           activeDate.current = data.date;
+          const today = data.date;
+          const weekday = new Date(today + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+          const entries = data.entries?.length
+            ? data.entries
+            : [{ entry_id: `empty-${today}`, entry_type: "empty", date: today, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
+          setTodayCards(entries);
         }
         setMessages([WELCOME_MESSAGE]);
       })

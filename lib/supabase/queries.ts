@@ -1,5 +1,28 @@
 import { createClient } from "./server";
 
+export type RecipeIngredient = {
+  ingredient_uuid: string;
+  ingredient_text: string;
+  ingredient_qty: number;
+  ingredient_unit: string;
+  nutrients: { value: number; unitname: string; nutrientname: string }[];
+};
+
+export type RecipeInstruction = {
+  step: number;
+  title: string;
+  actions: string[];
+  tips: string[];
+  notes: string | null;
+};
+
+export type RecipeData = {
+  meal_title: string;
+  recipe_uuid: string;
+  recipe_lines: RecipeIngredient[];
+  recipe_instructions: RecipeInstruction[];
+};
+
 export type RecipeCollection = {
   id: number | null;
   recipe_uuid: string;
@@ -18,6 +41,8 @@ export type RecipeCollection = {
   account_key: string | null;
   header_status: number | null;
   collections_short_desc: string | null;
+  recipe_data: RecipeData | null;
+  collection_names?: string[];
 };
 
 export type Collection = { id: number; name: string };
@@ -71,9 +96,13 @@ export async function getRecipe(
     .from("viw_user_collection_set")
     .select("*")
     .eq("recipe_uuid", recipeUuid)
-    .eq("account_key", userId)
-    .single();
+    .eq("account_key", userId);
 
-  if (error) return null;
-  return data;
+  if (error || !data || data.length === 0) return null;
+
+  const collection_names = [
+    ...new Set(data.map((r) => r.collections_short_desc).filter((c): c is string => !!c)),
+  ];
+
+  return { ...data[0], collection_names };
 }

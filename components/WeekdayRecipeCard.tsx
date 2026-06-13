@@ -76,7 +76,7 @@ export function WeekdayRecipeCard({
 
         {/* kcal — always visible */}
         {kcal != null && (
-          <span className="ml-1.5 flex-shrink-0 px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary whitespace-nowrap">
+          <span className="ml-1.5 flex-shrink-0 w-14 px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary whitespace-nowrap">
             {Math.round(kcal)} kcal
           </span>
         )}
