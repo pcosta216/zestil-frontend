@@ -34,7 +34,7 @@ export default async function RecipeDetailPage({
       {/* Header */}
       <header className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.07)] flex-shrink-0 bg-warm">
         <BackButton />
-        <span className="font-display text-base text-text-main">Recipe</span>
+        {/* <span className="font-display text-base text-text-main">Recipe</span> */}
         <div className="w-16" />
       </header>
 

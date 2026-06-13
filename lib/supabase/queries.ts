@@ -16,11 +16,18 @@ export type RecipeInstruction = {
   notes: string | null;
 };
 
+export type RecipeTotal = {
+  total_value: number;
+  unitname: string;
+  nutrientname: string;
+};
+
 export type RecipeData = {
   meal_title: string;
   recipe_uuid: string;
   recipe_lines: RecipeIngredient[];
   recipe_instructions: RecipeInstruction[];
+  recipe_totals: RecipeTotal[];
 };
 
 export type RecipeCollection = {
