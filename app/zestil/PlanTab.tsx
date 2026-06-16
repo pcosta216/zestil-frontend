@@ -416,9 +416,15 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   useEffect(() => {
     const container = stripScrollRef.current;
     const btn       = todayBtnRef.current;
-    if (container && btn) {
-      container.scrollLeft = btn.offsetLeft - container.clientWidth / 2 + btn.offsetWidth / 2;
-    }
+    if (!container || !btn) return;
+    const ro = new ResizeObserver(() => {
+      ro.disconnect();
+      requestAnimationFrame(() => {
+        container.scrollLeft = btn.offsetLeft - container.clientWidth / 2 + btn.offsetWidth / 2;
+      });
+    });
+    ro.observe(container);
+    return () => ro.disconnect();
   }, []);
 
   useEffect(() => {
