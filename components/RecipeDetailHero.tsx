@@ -205,14 +205,17 @@ export function RecipeDetailHero({ recipe }: { recipe: RecipeCollection }) {
 
         {/* Macros */}
         {recipe.recipe_data?.recipe_totals && recipe.recipe_data.recipe_totals.length > 0 && (() => {
+          const servings = recipe.servings_value && recipe.servings_value > 0 ? recipe.servings_value : 1;
           const find = (name: string) =>
-            recipe.recipe_data!.recipe_totals.find((t) => t.nutrientname === name)?.total_value ?? 0;
+            (recipe.recipe_data!.recipe_totals.find((t) => t.nutrientname === name)?.total_value ?? 0) / servings;
 
           const macros = [
-            { label: "kcal",    value: Math.round(find("Energy")),                        unit: ""  },
-            { label: "protein", value: Math.round(find("Protein")),                       unit: "g" },
-            { label: "carbs",   value: Math.round(find("Carbohydrate, by difference")),   unit: "g" },
-            { label: "fat",     value: Math.round(find("Total lipid (fat)")),              unit: "g" },
+            { label: "kcal",    value: Math.round(find("Energy")),                        unit: ""   },
+            { label: "protein", value: Math.round(find("Protein")),                       unit: "g"  },
+            { label: "carbs",   value: Math.round(find("Carbohydrate, by difference")),   unit: "g"  },
+            { label: "fat",     value: Math.round(find("Total lipid (fat)")),              unit: "g"  },
+            { label: "sugar",   value: Math.round(find("Total Sugars")),                   unit: "g"  },
+            { label: "sodium",  value: Math.round(find("Sodium, Na")),                     unit: "mg" },
           ];
 
           const colors: Record<string, { fill: string; track: string }> = {
@@ -220,6 +223,8 @@ export function RecipeDetailHero({ recipe }: { recipe: RecipeCollection }) {
             protein: { fill: "#3B6D11", track: "#E8F0DC" },
             carbs:   { fill: "#3B6D11", track: "#E8F0DC" },
             fat:     { fill: "#3B6D11", track: "#E8F0DC" },
+            sugar:   { fill: "#3B6D11", track: "#E8F0DC" },
+            sodium:  { fill: "#3B6D11", track: "#E8F0DC" },
           };
 
           return (

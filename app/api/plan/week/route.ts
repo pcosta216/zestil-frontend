@@ -6,20 +6,23 @@ export async function GET(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const dateParam = req.nextUrl.searchParams.get("date");
-  const today = dateParam ?? new Date().toISOString().split("T")[0];
+  const from = req.nextUrl.searchParams.get("from");
+  const to   = req.nextUrl.searchParams.get("to");
+  if (!from || !to) return NextResponse.json({ error: "Missing from/to params" }, { status: 400 });
 
   const { data, error } = await supabase
     .from("tbl_week_plan_entries")
     .select("entry_id, entry_date, meal_slot, entry_type, macros, agent_suggestion, confirmed, notes, serving_multiplier, quantity_g, original_snapshot, adjusted_snapshot")
     .eq("account_key", user.id)
-    .eq("entry_date", today)
-    .order("meal_slot", { ascending: true });
+    .gte("entry_date", from)
+    .lte("entry_date", to)
+    .order("entry_date", { ascending: true })
+    .order("meal_slot",  { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const entries = (data ?? []).map(rowToMealCard);
-  return NextResponse.json({ entries, date: today });
+  return NextResponse.json({ entries });
 }
 
 function rowToMealCard(e: any) {

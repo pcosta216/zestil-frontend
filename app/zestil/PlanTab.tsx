@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useCallback } from "react";
+import React, { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { Heart } from "@/lib/icons";
@@ -367,6 +367,19 @@ const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How 
 
 export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
+  const todayStr    = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
+  const stripDays   = useMemo(() => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    return Array.from({ length: 21 }, (_, i) => {
+      const d = new Date(base);
+      d.setDate(base.getDate() - 10 + i);
+      return { dateStr: d.toLocaleDateString("en-CA"), dayNum: d.getDate(), isSunday: d.getDay() === 0 };
+    });
+  }, []);
+  const stripScrollRef = useRef<HTMLDivElement>(null);
+  const todayBtnRef    = useRef<HTMLButtonElement>(null);
+
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [todayCards, setTodayCards]     = useState<MealCard[]>([]);
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
@@ -399,6 +412,14 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   }
 
   useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
+
+  useEffect(() => {
+    const container = stripScrollRef.current;
+    const btn       = todayBtnRef.current;
+    if (container && btn) {
+      container.scrollLeft = btn.offsetLeft - container.clientWidth / 2 + btn.offsetWidth / 2;
+    }
+  }, []);
 
   useEffect(() => {
     fetch("/api/goals")
@@ -490,16 +511,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
 
       setMessages((prev) => [...prev, agentMsg]);
 
-      // Refresh the Today section if the agent touched today's date
-      const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
-      const touchedToday = (changed_dates ?? []).includes(todayStr) ||
-        (meal_cards ?? []).some((c: MealCard) => c.date === todayStr);
-      if (touchedToday) {
-        fetch("/api/plan/today")
-          .then((r) => r.ok ? r.json() : null)
-          .then((d) => { if (d?.entries?.length) setTodayCards(d.entries); })
-          .catch(() => {});
-      }
+      // Refresh the selected day if the agent touched it
+      const touchedSelected = (changed_dates ?? []).includes(selectedDate) ||
+        (meal_cards ?? []).some((c: MealCard) => c.date === selectedDate);
+      if (touchedSelected) fetchDayCards(selectedDate).catch(() => {});
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
         const routedTo = (data._router?.routed_to as string) ?? ''
@@ -519,21 +534,23 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     }
   }, [isTyping]);
 
+  const fetchDayCards = useCallback(async (date: string) => {
+    const res = await fetch(`/api/plan/today?date=${date}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data?.date) {
+      activeDate.current = data.date;
+      const weekday = new Date(data.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+      const entries = data.entries?.length
+        ? data.entries
+        : [{ entry_id: `empty-${date}`, entry_type: "empty", date, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
+      setTodayCards(entries);
+    }
+  }, []);
+
   useEffect(() => {
-    fetch("/api/plan/today")
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
-        if (data?.date) {
-          activeDate.current = data.date;
-          const today = data.date;
-          const weekday = new Date(today + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
-          const entries = data.entries?.length
-            ? data.entries
-            : [{ entry_id: `empty-${today}`, entry_type: "empty", date: today, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
-          setTodayCards(entries);
-        }
-        setMessages([WELCOME_MESSAGE]);
-      })
+    fetchDayCards(new Date().toLocaleDateString("en-CA"))
+      .then(() => setMessages([WELCOME_MESSAGE]))
       .catch(() => setMessages([WELCOME_MESSAGE]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -570,7 +587,11 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     <>
       <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-3.5">
         <div className="text-[11px] font-medium text-text-muted uppercase tracking-wide text-center my-1">
-          Today
+          {selectedDate === ""
+            ? "This Week"
+            : selectedDate === todayStr
+            ? "Today"
+            : new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
         </div>
 
         {todayCards.length > 0 && (
@@ -743,6 +764,71 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
             {qr}
           </button>
         ))}
+      </div>
+
+      {/* Date strip */}
+      <div className="flex items-center justify-center gap-2 px-5 py-2 flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
+        <button
+          onClick={() => {
+            const base = new Date(); base.setHours(0, 0, 0, 0);
+            const dow  = base.getDay();
+            const startOffset = weekStartDay.current === 1
+              ? (dow === 0 ? -6 : 1 - dow)
+              : -dow;
+            const weekStart = new Date(base);
+            weekStart.setDate(base.getDate() + startOffset);
+            const weekDates = Array.from({ length: 7 }, (_, i) => {
+              const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+              return d.toLocaleDateString("en-CA");
+            });
+            const from = weekDates[0], to = weekDates[6];
+            setSelectedDate("");
+            fetch(`/api/plan/week?from=${from}&to=${to}`)
+              .then((r) => r.ok ? r.json() : null)
+              .then((d) => {
+                if (!d) return;
+                const entries = weekDates.flatMap((date) => {
+                  const dayEntries = (d.entries ?? []).filter((e: any) => e.date === date);
+                  if (dayEntries.length > 0) return dayEntries;
+                  const weekday = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
+                  return [{ entry_id: `empty-${date}`, entry_type: "empty", date, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
+                });
+                setTodayCards(entries);
+              })
+              .catch(() => {});
+          }}
+          className={`w-8 h-8 rounded-full text-[12px] font-semibold flex items-center justify-center transition-colors mr-1 ${
+            selectedDate === ""
+              ? "bg-green-primary text-white"
+              : "text-text-muted border border-[rgba(0,0,0,0.1)] hover:bg-warm"
+          }`}
+        >
+          w
+        </button>
+        <div ref={stripScrollRef} className="flex gap-2 overflow-x-auto no-scrollbar flex-1 py-[1px]">
+          {stripDays.map(({ dateStr, dayNum, isSunday }) => {
+            const isToday    = dateStr === todayStr;
+            const isSelected = dateStr === selectedDate;
+            return (
+              <button
+                key={dateStr}
+                ref={isToday ? todayBtnRef : undefined}
+                onClick={() => { setSelectedDate(dateStr); fetchDayCards(dateStr); }}
+                className={`flex-shrink-0 w-6 h-6 rounded-full text-[12px] font-medium flex items-center justify-center transition-colors ${
+                  isSelected
+                    ? "bg-green-primary text-white"
+                    : isToday
+                    ? "bg-green-light text-green-primary border border-green-border"
+                    : isSunday
+                    ? "text-blue-500 outline outline-1 outline-blue-400 hover:bg-blue-50"
+                    : "text-text-muted hover:bg-warm"
+                }`}
+              >
+                {dayNum}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className={`fixed bottom-4 left-4 right-4 z-50 transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
