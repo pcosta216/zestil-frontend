@@ -35,7 +35,7 @@ function formatDate(value: string): string {
   return value;
 }
 
-export function RecipeDetailHero({ recipe }: { recipe: RecipeCollection }) {
+export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: RecipeCollection; asOverlay?: boolean }) {
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -261,13 +261,15 @@ export function RecipeDetailHero({ recipe }: { recipe: RecipeCollection }) {
         })()}
 
         {/* Delete */}
-        <button
-          onClick={() => setShowConfirm(true)}
-          className="flex items-center justify-center gap-2 w-full bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors text-white text-sm font-medium rounded-xl px-4 py-3"
-        >
-          <Trash2 size={16} strokeWidth={2} />
-          Delete Recipe
-        </button>
+        {!asOverlay && (
+          <button
+            onClick={() => setShowConfirm(true)}
+            className="flex items-center justify-center gap-2 w-full bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors text-white text-sm font-medium rounded-xl px-4 py-3"
+          >
+            <Trash2 size={16} strokeWidth={2} />
+            Delete Recipe
+          </button>
+        )}
       </div>
 
       {/* Confirmation dialog */}

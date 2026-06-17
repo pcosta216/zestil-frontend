@@ -48,6 +48,7 @@ function rowToMealCard(e: any) {
     notes:              e.notes ?? null,
     agent_suggestion:   e.agent_suggestion ?? null,
     metadata:           snap,
+    recipe_uuid:        snap.recipe_uuid ?? null,
     serving_multiplier: parseFloat(e.serving_multiplier ?? "1") || 1,
   };
   if (e.entry_type !== "recipe") {

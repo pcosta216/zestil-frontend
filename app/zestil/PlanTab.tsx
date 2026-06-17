@@ -275,7 +275,7 @@ function groupByDay(cards: MealCard[]) {
   return groups;
 }
 
-function DayGrids({ cards, goals, mealSlots, onSend, onDeleteEntry }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onSend: (text: string) => void; onDeleteEntry?: (entryId: string) => void }) {
+function DayGrids({ cards, goals, mealSlots, onDeleteEntry }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void }) {
   const groups = groupByDay(cards);
   const sortedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
     const dateA = a.find(c => c.date)?.date ?? "";
@@ -325,7 +325,8 @@ function DayGrids({ cards, goals, mealSlots, onSend, onDeleteEntry }: { cards: M
                   protein={card.macros?.protein}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
                   hasNotes={!!card.notes}
-                  onMore={() => onSend(`Tell me more about "${card.name}"`)}
+                  recipeUuid={card.recipe_uuid ?? card.metadata?.recipe_uuid ?? undefined}
+                  macros={card.macros}
                   onDelete={() => onDeleteEntry?.(card.entry_id)}
                 />
               ))
@@ -601,7 +602,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         </div>
 
         {todayCards.length > 0 && (
-          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} onDeleteEntry={handleDeleteEntry} />
+          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} />
         )}
 
         {messages.map((msg) =>
@@ -748,7 +749,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                 </>
               )}
               {(msg.mealCards?.length ?? 0) > 0 && (
-                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onSend={sendMessage} onDeleteEntry={handleDeleteEntry} />
+                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
@@ -773,7 +774,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
       </div>
 
       {/* Date strip */}
-      <div className="flex items-center justify-center gap-2 px-5 py-2 flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
+      <div className="relative z-10 flex items-center justify-center gap-2 px-5 py-2 flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
         <button
           onClick={() => {
             const base = new Date(); base.setHours(0, 0, 0, 0);
