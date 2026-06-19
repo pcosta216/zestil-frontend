@@ -1,6 +1,38 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+const NUTRIENT_MAP: Record<string, string> = {
+  "Energy":                      "kcal",
+  "Carbohydrate, by difference": "carbs",
+  "Protein":                     "protein",
+  "Total lipid (fat)":           "fat",
+  "Total Sugars":                "sugar",
+  "Sodium, Na":                  "sodium",
+};
+
+function extractRecipeMacros(snapshot: any, servingMultiplier: number): Record<string, number> {
+  const servings = Math.max(parseFloat(snapshot?.metadata?.servings_value ?? "1") || 1, 0.001);
+  const macros: Record<string, number> = {};
+  for (const item of (snapshot?.recipe_totals ?? [])) {
+    const key = NUTRIENT_MAP[item.nutrientname ?? ""];
+    if (!key) continue;
+    const total = parseFloat(item.total_value ?? "0") || 0;
+    macros[key] = Math.round((total / servings) * servingMultiplier * 100) / 100;
+  }
+  return macros;
+}
+
+function extractIngredientMacros(snapshot: any, quantityG: number): Record<string, number> {
+  const macros: Record<string, number> = {};
+  for (const item of (snapshot?.ingredient_nutrients ?? [])) {
+    const key = NUTRIENT_MAP[item.nutrient_name ?? ""];
+    if (!key) continue;
+    const per100g = parseFloat(item.nutrient_value ?? "0") || 0;
+    macros[key] = Math.round((per100g / 100) * quantityG * 100) / 100;
+  }
+  return macros;
+}
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -23,12 +55,23 @@ export async function GET(req: NextRequest) {
 }
 
 function rowToMealCard(e: any) {
-  const snap = e.adjusted_snapshot ?? e.original_snapshot ?? {};
-  const name = e.entry_type === "recipe"
+  const isOptimised = !!e.adjusted_snapshot;
+  const snap        = e.adjusted_snapshot ?? e.original_snapshot ?? {};
+  const name        = e.entry_type === "recipe"
     ? (snap.metadata?.meal_title ?? snap.meal_title ?? "Unknown recipe")
     : (snap.ingredient_name ?? snap.description ?? "Unknown ingredient");
 
-  const m = e.macros ?? {};
+  const m    = e.macros ?? {};
+  const mult = parseFloat(e.serving_multiplier ?? "1") || 1;
+  const qty  = parseFloat(e.quantity_g ?? "0") || 100;
+
+  let originalMacros: Record<string, number> | undefined;
+  if (isOptimised && e.original_snapshot) {
+    originalMacros = e.entry_type === "recipe"
+      ? extractRecipeMacros(e.original_snapshot, mult)
+      : extractIngredientMacros(e.original_snapshot, qty);
+  }
+
   const card: any = {
     entry_id:          e.entry_id,
     day:               new Date(e.entry_date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
@@ -44,15 +87,17 @@ function rowToMealCard(e: any) {
       sugar:   parseFloat((m.sugar   ?? 0).toFixed(1)),
       sodium:  Math.round(m.sodium   ?? 0),
     },
+    is_optimised:       isOptimised,
+    original_macros:    originalMacros,
     confirmed:          e.confirmed ?? true,
     notes:              e.notes ?? null,
     agent_suggestion:   e.agent_suggestion ?? null,
     metadata:           snap,
     recipe_uuid:        snap.recipe_uuid ?? null,
-    serving_multiplier: parseFloat(e.serving_multiplier ?? "1") || 1,
+    serving_multiplier: mult,
   };
   if (e.entry_type !== "recipe") {
-    card.quantity_g = parseFloat(e.quantity_g ?? "0") || 0;
+    card.quantity_g = qty;
   }
   return card;
 }

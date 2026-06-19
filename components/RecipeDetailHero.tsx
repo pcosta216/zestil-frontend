@@ -229,7 +229,9 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
 
           return (
             <div>
-              <h2 className="font-display text-base text-text-main mb-3">Nutrition</h2>
+              <h2 className="font-display text-base text-text-main mb-3">
+                Nutrition <span className="text-[11px] text-text-muted ml-2 align-middle">Per serving</span>
+              </h2>
               <div className="flex items-center justify-around py-1">
                 {macros.map(({ label, value, unit }) => {
                   const { fill, track } = colors[label];

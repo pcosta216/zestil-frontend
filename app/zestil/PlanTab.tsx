@@ -29,6 +29,8 @@ interface MealCard {
   serving_multiplier?: number;
   quantity_g?:        number;
   macros:             { kcal: number; protein: number; carbs: number; fat: number; sugar: number; sodium: number };
+  original_macros?:   { kcal: number; protein: number; carbs: number; fat: number; sugar: number; sodium: number };
+  is_optimised?:      boolean;
   agent_suggestion?:  any;
   confirmed:          boolean;
   notes?:             string | null;
@@ -275,7 +277,7 @@ function groupByDay(cards: MealCard[]) {
   return groups;
 }
 
-function DayGrids({ cards, goals, mealSlots, onDeleteEntry }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void }) {
+function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisingDate }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void; onOptimise?: (date: string) => void; optimisingDate?: string | null }) {
   const groups = groupByDay(cards);
   const sortedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
     const dateA = a.find(c => c.date)?.date ?? "";
@@ -308,6 +310,8 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry }: { cards: MealCard[
               sodium:  (acc.sodium  ?? 0) + (c.macros?.sodium  ?? 0),
             }), {})}
             goals={goals ?? undefined}
+            onOptimise={!isEmpty && onOptimise ? () => onOptimise(dayCards[0]?.date) : undefined}
+            optimising={optimisingDate === dayCards[0]?.date}
           >
             {isEmpty ? (
               <div className="px-3 py-2.5 text-[12px] text-text-muted italic">
@@ -327,6 +331,8 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry }: { cards: MealCard[
                   hasNotes={!!card.notes}
                   recipeUuid={card.recipe_uuid ?? card.metadata?.recipe_uuid ?? undefined}
                   macros={card.macros}
+                  originalMacros={card.original_macros}
+                  isOptimised={card.is_optimised}
                   onDelete={() => onDeleteEntry?.(card.entry_id)}
                 />
               ))
@@ -387,7 +393,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const [input, setInput]               = useState("");
   const [quickReplies, setQuickReplies] = useState(DEFAULT_QUICK_REPLIES);
   const [macroGoals, setMacroGoals]     = useState<MacroData | null>(null);
-  const [mealSlots, setMealSlots]       = useState<string[]>([]);
+  const [mealSlots,      setMealSlots]      = useState<string[]>([]);
+  const [optimisingDate, setOptimisingDate] = useState<string | null>(null);
   const [pickerMsgId,    setPickerMsgId]    = useState<string | null>(null);
   const [checked,        setChecked]        = useState<Set<number>>(new Set());
   const [hearted,        setHearted]        = useState<Set<string>>(new Set());
@@ -590,6 +597,54 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     }
   }, [showBanner]);
 
+  const handleOptimise = useCallback(async (date: string) => {
+    setOptimisingDate(date);
+    try {
+      const res  = await fetch("/api/plan/optimise", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ date_str: date }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        showBanner({ type: "error", message: data.error ?? "Optimisation failed." });
+        return;
+      }
+      // Replace cards for this date with the updated entries from the optimizer
+      const updatedCards: MealCard[] = (data.updated_entries?.entries ?? []).map((e: any) => ({
+        entry_id:           e.entry_id,
+        entry_type:         e.entry_type,
+        day:                new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
+        date,
+        meal_slot:          e.meal_slot,
+        name:               e.name,
+        serving_multiplier: e.serving_multiplier,
+        quantity_g:         e.quantity_g,
+        macros:             e.macros,
+        original_macros:    e.original_macros,
+        is_optimised:       e.is_optimised,
+        confirmed:          true,
+        notes:              null,
+        metadata:           e.snapshot ?? {},
+      }));
+      const replaceCards = (prev: MealCard[]) => [
+        ...prev.filter(c => c.date !== date),
+        ...updatedCards,
+      ];
+      skipNextScroll.current = true;
+      setTodayCards(prev => replaceCards(prev));
+      setMessages(prev => prev.map(msg => {
+        if (msg.type !== "agent" || !(msg as AgentMessage).mealCards) return msg;
+        return { ...msg, mealCards: replaceCards((msg as AgentMessage).mealCards!) };
+      }));
+      showBanner({ type: "success", message: `Optimised ${date} — ${data.summary?.slice(0, 80) ?? "done"}.` });
+    } catch (e) {
+      showBanner({ type: "error", message: "Optimisation failed — network error." });
+    } finally {
+      setOptimisingDate(null);
+    }
+  }, [showBanner]);
+
   return (
     <>
       <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-3.5">
@@ -602,7 +657,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         </div>
 
         {todayCards.length > 0 && (
-          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} />
+          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} onOptimise={handleOptimise} optimisingDate={optimisingDate} />
         )}
 
         {messages.map((msg) =>
@@ -749,7 +804,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                 </>
               )}
               {(msg.mealCards?.length ?? 0) > 0 && (
-                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} />
+                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} onOptimise={handleOptimise} optimisingDate={optimisingDate} />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />

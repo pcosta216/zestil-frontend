@@ -10,11 +10,13 @@ interface MacroData {
 export type { MacroData };
 
 interface Props {
-  weekday:   string;
-  date?:     string;
-  macros?:   MacroData;
-  goals?:    MacroData;
-  children?: React.ReactNode;
+  weekday:      string;
+  date?:        string;
+  macros?:      MacroData;
+  goals?:       MacroData;
+  onOptimise?:  () => void;
+  optimising?:  boolean;
+  children?:    React.ReactNode;
 }
 
 const MACRO_LABELS: { key: keyof MacroData; label: string; fill: string; track: string }[] = [
@@ -61,15 +63,33 @@ function MacroRing({ value, goal, label, fill, track }: { value: number; goal: n
   );
 }
 
-export function WeekdayGrid({ weekday, date, macros, goals, children }: Props) {
+export function WeekdayGrid({ weekday, date, macros, goals, onOptimise, optimising, children }: Props) {
   const rings = (macros && goals)
     ? MACRO_LABELS.filter(({ key }) => (goals[key] ?? 0) > 0)
     : [];
 
   return (
     <div className="w-full p-3 bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg flex flex-col gap-1">
-      <div className="text-text-muted text-[10px] uppercase tracking-wide font-display">
-        {weekday}{date && `, ${date}`}
+      <div className="flex items-center justify-between">
+        <div className="text-text-muted text-[10px] uppercase tracking-wide font-display">
+          {weekday}{date && `, ${date}`}
+        </div>
+        {onOptimise && date && (
+          <button
+            onClick={() => onOptimise()}
+            disabled={optimising}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-medium border transition-colors disabled:opacity-50 disabled:cursor-not-allowed bg-green-light border-green-border text-green-primary hover:bg-green-border"
+          >
+            {optimising ? (
+              <span className="w-2.5 h-2.5 rounded-full border border-green-primary border-t-transparent animate-spin inline-block" />
+            ) : (
+              <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+            )}
+            {optimising ? 'Optimising…' : 'Optimise'}
+          </button>
+        )}
       </div>
       {rings.length > 0 && (
         <div className="flex items-center justify-around py-1">

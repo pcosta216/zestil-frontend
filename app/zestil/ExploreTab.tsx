@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
+import { createClient } from "@/lib/supabase/browser";
 import { Heart } from "@/lib/icons";
 
 interface MealCard {
@@ -168,6 +169,7 @@ function TypingIndicator() {
 }
 
 export function ExploreTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
+  const supabase = createClient();
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping] = useState(false);
@@ -368,12 +370,8 @@ export function ExploreTab({ collections: rawCollections = [], onRecipeSaved }: 
                                     const recipeUuid = msg.recipeUuid ?? (msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null);
                                     let savedUuid: string | null = recipeUuid ?? null;
                                     if (recipeUuid) {
-                                      const res = await fetch("/api/recipe/link", {
-                                        method: "POST",
-                                        headers: { "Content-Type": "application/json" },
-                                        body: JSON.stringify({ recipe_uuid: recipeUuid }),
-                                      });
-                                      if (!res.ok) throw new Error("link failed");
+                                      const { error } = await supabase.rpc("link_user_recipe", { p_recipe_uuid: recipeUuid });
+                                      if (error) throw new Error("link failed");
                                     } else {
                                       const res = await fetch("/api/recipe/submit", {
                                         method: "POST",

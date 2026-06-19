@@ -10,5 +10,6 @@ import { Heart } from 'lucide-react';
 import { Trash2 } from 'lucide-react';
 import { CircleEllipsis } from 'lucide-react';
 import { Gauge } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
-export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus, Heart, Trash2, CircleEllipsis, Info, Gauge };
+export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus, Heart, Trash2, CircleEllipsis, Info, Gauge, Sparkles };

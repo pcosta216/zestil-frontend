@@ -43,6 +43,8 @@ interface Props {
   kcal?:               number;
   protein?:            number;
   macros?:             MacroSet;
+  originalMacros?:     MacroSet;
+  isOptimised?:        boolean;
   servings_value?:     number;
   serving_multiplier?: number;
   hasSuggestion?:      boolean;
@@ -74,7 +76,8 @@ export function WeekdayRecipeCard({
   title, subtitle, kcal, hasSuggestion,
   servings_value, serving_multiplier,
   cardVariant = "recipe", moreOptions = DEFAULT_MORE_OPTIONS,
-  recipeUuid, macros, onAdd, onDelete, onInfo,
+  recipeUuid, macros, originalMacros, isOptimised,
+  onAdd, onDelete, onInfo,
 }: Props) {
   const [barOpen,        setBarOpen]        = useState(false);
   const [moreMenuOpen,   setMoreMenuOpen]   = useState(false);
@@ -82,6 +85,10 @@ export function WeekdayRecipeCard({
   const [overlayOpen,    setOverlayOpen]    = useState(false);
   const [macroOverlay,   setMacroOverlay]   = useState(false);
   const [loading,        setLoading]        = useState(false);
+  const [showOriginal,   setShowOriginal]   = useState(false);
+
+  const displayMacros = (isOptimised && showOriginal && originalMacros) ? originalMacros : macros;
+  const displayKcal   = displayMacros?.kcal ?? kcal;
 
   useEffect(() => {
     if (!recipeUuid) return;
@@ -155,7 +162,7 @@ export function WeekdayRecipeCard({
         {macroOverlay && (
           <div
             className="fixed inset-0 z-[15] backdrop-blur-sm bg-black/25"
-            onClick={() => setMacroOverlay(false)}
+            onClick={() => { setMacroOverlay(false); setBarOpen(false); }}
           />
         )}
 
@@ -258,10 +265,10 @@ export function WeekdayRecipeCard({
                     )}
 
                     {/* Macro rings */}
-                    {macros && (
+                    {displayMacros && (
                       <div className="flex items-center justify-between pt-1">
                         {MACRO_RINGS.map(({ key, label, unit, fill, track }) => {
-                          const value = Math.round(macros[key]);
+                          const value = Math.round(displayMacros[key]);
                           const r = 16, circ = 2 * Math.PI * r;
                           return (
                             <div key={key} className="flex flex-col items-center gap-0.5">
@@ -286,11 +293,11 @@ export function WeekdayRecipeCard({
             })()}
 
             {/* Fallback: just rings if no recipe data available */}
-            {!loading && !recipe && macros && (
+            {!loading && !recipe && displayMacros && (
               <div className="px-3 py-2.5">
                 <div className="flex items-center justify-between">
                   {MACRO_RINGS.map(({ key, label, unit, fill, track }) => {
-                    const value = Math.round(macros[key]);
+                    const value = Math.round(displayMacros[key]);
                     const r = 16, circ = 2 * Math.PI * r;
                     return (
                       <div key={key} className="flex flex-col items-center gap-0.5">
@@ -351,15 +358,28 @@ export function WeekdayRecipeCard({
             </div>
           )}
 
+          {isOptimised && !barOpen && (
+            <button
+              onClick={(e) => { e.stopPropagation(); setShowOriginal(v => !v); }}
+              className={`ml-1.5 flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] whitespace-nowrap border transition-colors ${
+                showOriginal
+                  ? "bg-white border-[rgba(0,0,0,0.1)] text-text-muted"
+                  : "bg-green-light border-green-border text-green-primary"
+              }`}
+            >
+              {showOriginal ? "original" : "✦ optimised"}
+            </button>
+          )}
+
           {serving_multiplier != null && servings_value != null && (
             <span className="ml-1.0 flex-shrink-0">
               <ServingInfo servingMultiplier={serving_multiplier} servingsValue={servings_value} />
             </span>
           )}
 
-          {kcal != null && (
+          {displayKcal != null && (
             <span className="ml-1.5 flex-shrink-0 w-14 px-2 py-[3px] bg-green-light rounded-full text-[10px] text-green-primary whitespace-nowrap">
-              {Math.round(kcal)} kcal
+              {Math.round(displayKcal)} kcal
             </span>
           )}
 
