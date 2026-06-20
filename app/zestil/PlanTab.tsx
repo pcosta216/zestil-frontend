@@ -403,8 +403,9 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const stripScrollRef = useRef<HTMLDivElement>(null);
   const todayBtnRef    = useRef<HTMLButtonElement>(null);
 
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
-  const [todayCards, setTodayCards]     = useState<MealCard[]>([]);
+  const [selectedDate,    setSelectedDate]    = useState(() => new Date().toLocaleDateString("en-CA"));
+  const [todayCards,      setTodayCards]      = useState<MealCard[]>([]);
+  const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set());
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
   const [input, setInput]               = useState("");
@@ -451,6 +452,37 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     ro.observe(container);
     return () => ro.disconnect();
   }, []);
+
+  useEffect(() => {
+    const from = stripDays[0].dateStr;
+    const to   = stripDays[stripDays.length - 1].dateStr;
+    fetch(`/api/plan/week?from=${from}&to=${to}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        setDatesWithEntries(new Set<string>(
+          (d.entries ?? [])
+            .filter((e: any) => e.entry_type !== "empty")
+            .map((e: any) => e.date as string)
+            .filter(Boolean)
+        ));
+      })
+      .catch(() => {});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    setDatesWithEntries(prev => {
+      const next = new Set(prev);
+      const dateSet = new Set(todayCards.map(c => c.date).filter(Boolean));
+      for (const date of dateSet) {
+        const hasReal = todayCards.some(c => c.date === date && c.entry_type !== "empty");
+        if (hasReal) next.add(date);
+        else next.delete(date);
+      }
+      return next;
+    });
+  }, [todayCards]);
 
   useEffect(() => {
     fetch("/api/goals")
@@ -894,17 +926,20 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                 key={dateStr}
                 ref={isToday ? todayBtnRef : undefined}
                 onClick={() => { setSelectedDate(dateStr); fetchDayCards(dateStr); }}
-                className={`flex-shrink-0 w-6 h-6 rounded-full text-[12px] font-medium flex items-center justify-center transition-colors ${
+                className="flex-shrink-0 flex flex-col items-center gap-[2px] group"
+              >
+                <span className={`w-6 h-6 rounded-full text-[12px] font-medium flex items-center justify-center transition-colors ${
                   isSelected
                     ? "bg-green-primary text-white"
                     : isToday
                     ? "bg-green-light text-green-primary border border-green-border"
                     : isSunday
-                    ? "text-blue-500 outline outline-1 outline-blue-400 hover:bg-blue-50"
-                    : "text-text-muted hover:bg-warm"
-                }`}
-              >
-                {dayNum}
+                    ? "text-blue-500 outline outline-1 outline-blue-400 group-hover:bg-blue-50"
+                    : "text-text-muted group-hover:bg-warm"
+                }`}>
+                  {dayNum}
+                </span>
+                <span className={`w-1 h-1 rounded-full ${datesWithEntries.has(dateStr) && !isSelected ? "bg-green-primary" : "bg-transparent"}`} />
               </button>
             );
           })}
