@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await supabase
     .from("tbl_week_plan_entries")
-    .select("entry_id, entry_date, meal_slot, entry_type, macros, agent_suggestion, confirmed, notes, serving_multiplier, quantity_g, original_snapshot, adjusted_snapshot")
+    .select("entry_id, entry_date, meal_slot, entry_type, role, macros, agent_suggestion, confirmed, notes, serving_multiplier, quantity_g, original_snapshot, adjusted_snapshot")
     .eq("account_key", user.id)
     .eq("entry_date", today)
     .order("meal_slot", { ascending: true });
@@ -78,6 +78,7 @@ function rowToMealCard(e: any) {
     date:              e.entry_date,
     meal_slot:         e.meal_slot,
     entry_type:        e.entry_type,
+    role:              e.role ?? "main",
     name,
     macros: {
       kcal:    Math.round(m.kcal    ?? 0),

@@ -25,6 +25,7 @@ interface MealCard {
   day:                string;
   date:               string;
   meal_slot:          string;
+  role?:              string;
   name:               string;
   serving_multiplier?: number;
   quantity_g?:        number;
@@ -277,6 +278,19 @@ function groupByDay(cards: MealCard[]) {
   return groups;
 }
 
+const ROLE_ORDER: Record<string, number> = { main: 0, side: 1, dessert: 2 };
+
+function cap(s: string) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+// "Lunch" for mains; "Lunch - Side" / "Dinner - Dessert" for non-main roles.
+function slotRoleLabel(card: MealCard): string {
+  const slot = cap(card.meal_slot ?? "");
+  const role = (card.role ?? "main").toLowerCase();
+  return role === "main" ? slot : `${slot} - ${cap(role)}`;
+}
+
 function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisingDate }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void; onOptimise?: (date: string) => void; optimisingDate?: string | null }) {
   const groups = groupByDay(cards);
   const sortedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
@@ -293,7 +307,10 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
           ? [...realCards].sort((a, b) => {
               const ai = mealSlots.findIndex((s) => s.toLowerCase() === a.meal_slot?.toLowerCase());
               const bi = mealSlots.findIndex((s) => s.toLowerCase() === b.meal_slot?.toLowerCase());
-              return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+              const slotDiff = (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+              if (slotDiff !== 0) return slotDiff;
+              // Within a slot: main → side → dessert
+              return (ROLE_ORDER[(a.role ?? "main").toLowerCase()] ?? 0) - (ROLE_ORDER[(b.role ?? "main").toLowerCase()] ?? 0);
             })
           : realCards;
         return (
@@ -322,7 +339,7 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                 <WeekdayRecipeCard
                   key={card.entry_id ?? `${card.name}-${i}`}
                   title={card.name}
-                  subtitle={card.meal_slot}
+                  subtitle={slotRoleLabel(card)}
                   kcal={card.macros?.kcal}
                   servings_value={card.entry_type === 'ingredient' ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
@@ -617,6 +634,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         day:                new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
         date,
         meal_slot:          e.meal_slot,
+        role:               e.role ?? "main",
         name:               e.name,
         serving_multiplier: e.serving_multiplier,
         quantity_g:         e.quantity_g,
