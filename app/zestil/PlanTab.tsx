@@ -660,23 +660,30 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         return;
       }
       // Replace cards for this date with the updated entries from the optimizer
-      const updatedCards: MealCard[] = (data.updated_entries?.entries ?? []).map((e: any) => ({
-        entry_id:           e.entry_id,
-        entry_type:         e.entry_type,
-        day:                new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
-        date,
-        meal_slot:          e.meal_slot,
-        role:               e.role ?? "main",
-        name:               e.name,
-        serving_multiplier: e.serving_multiplier,
-        quantity_g:         e.quantity_g,
-        macros:             e.macros,
-        original_macros:    e.original_macros,
-        is_optimised:       e.is_optimised,
-        confirmed:          true,
-        notes:              null,
-        metadata:           e.snapshot ?? {},
-      }));
+      const updatedCards: MealCard[] = (data.updated_entries?.entries ?? []).map((e: any) => {
+        const snap = e.snapshot ?? e.adjusted_snapshot ?? e.original_snapshot ?? {};
+        const name = e.entry_type === "recipe"
+          ? (snap.metadata?.meal_title ?? snap.meal_title ?? e.name ?? "Unknown recipe")
+          : (snap.ingredient_name ?? snap.description ?? e.name ?? "Unknown ingredient");
+        return {
+          entry_id:           e.entry_id,
+          entry_type:         e.entry_type,
+          day:                new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
+          date,
+          meal_slot:          e.meal_slot,
+          role:               e.role ?? "main",
+          name,
+          serving_multiplier: e.serving_multiplier,
+          quantity_g:         e.quantity_g,
+          macros:             e.macros,
+          original_macros:    e.original_macros,
+          is_optimised:       e.is_optimised,
+          recipe_uuid:        snap.recipe_uuid ?? null,
+          confirmed:          true,
+          notes:              null,
+          metadata:           snap,
+        };
+      });
       const replaceCards = (prev: MealCard[]) => [
         ...prev.filter(c => c.date !== date),
         ...updatedCards,
