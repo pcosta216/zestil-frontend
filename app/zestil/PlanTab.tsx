@@ -659,48 +659,15 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         showBanner({ type: "error", message: data.error ?? "Optimisation failed." });
         return;
       }
-      // Replace cards for this date with the updated entries from the optimizer
-      const updatedCards: MealCard[] = (data.updated_entries?.entries ?? []).map((e: any) => {
-        const snap = e.snapshot ?? e.adjusted_snapshot ?? e.original_snapshot ?? {};
-        const name = e.entry_type === "recipe"
-          ? (snap.metadata?.meal_title ?? snap.meal_title ?? e.name ?? "Unknown recipe")
-          : (snap.ingredient_name ?? snap.description ?? e.name ?? "Unknown ingredient");
-        return {
-          entry_id:           e.entry_id,
-          entry_type:         e.entry_type,
-          day:                new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
-          date,
-          meal_slot:          e.meal_slot,
-          role:               e.role ?? "main",
-          name,
-          serving_multiplier: e.serving_multiplier,
-          quantity_g:         e.quantity_g,
-          macros:             e.macros,
-          original_macros:    e.original_macros,
-          is_optimised:       e.is_optimised,
-          recipe_uuid:        snap.recipe_uuid ?? null,
-          confirmed:          true,
-          notes:              null,
-          metadata:           snap,
-        };
-      });
-      const replaceCards = (prev: MealCard[]) => [
-        ...prev.filter(c => c.date !== date),
-        ...updatedCards,
-      ];
       skipNextScroll.current = true;
-      setTodayCards(prev => replaceCards(prev));
-      setMessages(prev => prev.map(msg => {
-        if (msg.type !== "agent" || !(msg as AgentMessage).mealCards) return msg;
-        return { ...msg, mealCards: replaceCards((msg as AgentMessage).mealCards!) };
-      }));
+      await fetchDayCards(date);
       showBanner({ type: "success", message: `Optimised ${date} — ${data.summary?.slice(0, 80) ?? "done"}.` });
     } catch (e) {
       showBanner({ type: "error", message: "Optimisation failed — network error." });
     } finally {
       setOptimisingDate(null);
     }
-  }, [showBanner]);
+  }, [showBanner, fetchDayCards]);
 
   return (
     <>
