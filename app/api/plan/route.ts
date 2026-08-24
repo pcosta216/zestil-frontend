@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
 
   const { data: { session } } = await supabase.auth.getSession();
 
+  if (!session?.access_token) {
+    return NextResponse.json({ message: "No session token" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
 
   let data: Response;
@@ -32,7 +36,7 @@ export async function POST(req: NextRequest) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${session?.access_token ?? process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+        Authorization: `Bearer ${session.access_token}`,
       },
       body: JSON.stringify({
         ...body,
