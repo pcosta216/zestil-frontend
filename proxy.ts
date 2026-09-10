@@ -1,6 +1,16 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+/** Signed-out pages. A signed-in user hitting one is sent to the app. */
+const GUEST_ROUTES = ["/login", "/signup", "/forgot-password"];
+
+/**
+ * Pages that need a session. `/reset-password` is here rather than in
+ * GUEST_ROUTES on purpose: a recovery link signs the user in before they land
+ * on it, so it has to stay reachable while authenticated.
+ */
+const PROTECTED_ROUTES = ["/onboarding", "/reset-password"];
+
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
 
@@ -31,11 +41,14 @@ export async function proxy(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  if (!user && pathname.startsWith("/zestil")) {
+  if (
+    !user &&
+    (pathname.startsWith("/zestil") || PROTECTED_ROUTES.includes(pathname))
+  ) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  if (user && pathname === "/login") {
+  if (user && GUEST_ROUTES.includes(pathname)) {
     return NextResponse.redirect(new URL("/zestil", request.url));
   }
 
@@ -43,5 +56,15 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/login", "/zestil/:path*", "/api/:path*"],
+  // /auth/confirm is deliberately absent — it sets the session cookies itself.
+  matcher: [
+    "/",
+    "/login",
+    "/signup",
+    "/forgot-password",
+    "/reset-password",
+    "/onboarding",
+    "/zestil/:path*",
+    "/api/:path*",
+  ],
 };

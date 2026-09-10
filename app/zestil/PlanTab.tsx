@@ -341,7 +341,7 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   title={card.name}
                   subtitle={slotRoleLabel(card)}
                   kcal={card.macros?.kcal}
-                  servings_value={card.entry_type === 'ingredient' ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
+                  servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack') && (card.metadata?.side_kind ?? card.metadata?.snack_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
                   protein={card.macros?.protein}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
@@ -377,6 +377,22 @@ function IngredientList({ cards, onSend }: { cards: IngredientCard[]; onSend: (t
 }
 
 // ── PlanTab ───────────────────────────────────────────────────────────────────
+
+// Placeholder row for a day with no entries, so the grid still renders its header.
+function emptyCard(date: string): MealCard {
+  return {
+    entry_id:   `empty-${date}`,
+    entry_type: "empty",
+    date,
+    day:        new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" }),
+    meal_slot:  "",
+    name:       "",
+    macros:     { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 },
+    confirmed:  true,
+    notes:      null,
+    metadata:   {},
+  };
+}
 
 const INITIAL_MESSAGES: Message[] = [];
 
@@ -503,6 +519,42 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, isTyping]);
 
+  const fetchDayCards = useCallback(async (date: string) => {
+    const res = await fetch(`/api/plan/today?date=${date}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data?.date) {
+      activeDate.current = data.date;
+      const entries = data.entries?.length ? data.entries : [emptyCard(data.date)];
+      setTodayCards(entries);
+    }
+  }, []);
+
+  // The 7-day equivalent of fetchDayCards. Shared by the "w" button and by any refresh that
+  // happens while week view is active — refetching a single day there would drop the other six.
+  const fetchWeekCards = useCallback(async () => {
+    const base = new Date(); base.setHours(0, 0, 0, 0);
+    const dow  = base.getDay();
+    const startOffset = weekStartDay.current === 1
+      ? (dow === 0 ? -6 : 1 - dow)
+      : -dow;
+    const weekStart = new Date(base);
+    weekStart.setDate(base.getDate() + startOffset);
+    const weekDates = Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
+      return d.toLocaleDateString("en-CA");
+    });
+
+    const res = await fetch(`/api/plan/week?from=${weekDates[0]}&to=${weekDates[6]}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data) return;
+    setTodayCards(weekDates.flatMap((date) => {
+      const dayEntries = (data.entries ?? []).filter((e: MealCard) => e.date === date);
+      return dayEntries.length > 0 ? dayEntries : [emptyCard(date)];
+    }));
+  }, []);
+
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
 
@@ -574,10 +626,13 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
 
       setMessages((prev) => [...prev, agentMsg]);
 
-      // Refresh the selected day if the agent touched it
-      const touchedSelected = (changed_dates ?? []).includes(selectedDate) ||
-        (meal_cards ?? []).some((c: MealCard) => c.date === selectedDate);
-      if (touchedSelected) fetchDayCards(selectedDate).catch(() => {});
+      // Refresh whatever view is on screen if the agent touched it. Week view (selectedDate === "")
+      // never matches a date, so any touched day is reason to refetch the whole week.
+      if (selectedDate === "") {
+        if (datesInResponse.length) fetchWeekCards().catch(() => {});
+      } else if (datesInResponse.includes(selectedDate)) {
+        fetchDayCards(selectedDate).catch(() => {});
+      }
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
         const routedTo = (data._router?.routed_to as string) ?? ''
@@ -595,21 +650,9 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     } finally {
       setIsTyping(false);
     }
-  }, [isTyping]);
-
-  const fetchDayCards = useCallback(async (date: string) => {
-    const res = await fetch(`/api/plan/today?date=${date}`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (data?.date) {
-      activeDate.current = data.date;
-      const weekday = new Date(data.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
-      const entries = data.entries?.length
-        ? data.entries
-        : [{ entry_id: `empty-${date}`, entry_type: "empty", date, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
-      setTodayCards(entries);
-    }
-  }, []);
+    // selectedDate must be a dep: the refresh above reads it, and with only [isTyping] the
+    // memoised closure kept whichever date was selected when isTyping last flipped.
+  }, [isTyping, selectedDate, fetchDayCards, fetchWeekCards]);
 
   useEffect(() => {
     fetchDayCards(new Date().toLocaleDateString("en-CA"))
@@ -648,6 +691,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
 
   const handleOptimise = useCallback(async (date: string) => {
     setOptimisingDate(date);
+    const startedAt = performance.now();
     try {
       const res  = await fetch("/api/plan/optimise", {
         method:  "POST",
@@ -655,19 +699,29 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         body:    JSON.stringify({ date_str: date }),
       });
       const data = await res.json();
+      // Log the timing object whole rather than picking fields out of it — the backend has renamed
+      // its internals before (turns/cycles → rounds) and a named read would silently print
+      // undefined next time. The elapsed number is measured here, so it survives any rename.
+      console.log(
+        `[optimise] ${date} took ${Math.round(performance.now() - startedAt)}ms (client round-trip)`,
+        data?.timing ?? "(no timing in response)",
+      );
       if (!res.ok || !data.ok) {
         showBanner({ type: "error", message: data.error ?? "Optimisation failed." });
         return;
       }
       skipNextScroll.current = true;
-      await fetchDayCards(date);
+      // Week view holds all 7 days in the same state; refetching just `date` would blank the rest.
+      if (selectedDate === "") await fetchWeekCards();
+      else                     await fetchDayCards(date);
       showBanner({ type: "success", message: `Optimised ${date} — ${data.summary?.slice(0, 80) ?? "done"}.` });
     } catch (e) {
+      console.log(`[optimise] ${date} failed after ${Math.round(performance.now() - startedAt)}ms`, e);
       showBanner({ type: "error", message: "Optimisation failed — network error." });
     } finally {
       setOptimisingDate(null);
     }
-  }, [showBanner, fetchDayCards]);
+  }, [showBanner, fetchDayCards, fetchWeekCards, selectedDate]);
 
   return (
     <>
@@ -856,32 +910,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
       <div className="relative z-10 flex items-center justify-center gap-2 px-5 py-2 flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
         <button
           onClick={() => {
-            const base = new Date(); base.setHours(0, 0, 0, 0);
-            const dow  = base.getDay();
-            const startOffset = weekStartDay.current === 1
-              ? (dow === 0 ? -6 : 1 - dow)
-              : -dow;
-            const weekStart = new Date(base);
-            weekStart.setDate(base.getDate() + startOffset);
-            const weekDates = Array.from({ length: 7 }, (_, i) => {
-              const d = new Date(weekStart); d.setDate(weekStart.getDate() + i);
-              return d.toLocaleDateString("en-CA");
-            });
-            const from = weekDates[0], to = weekDates[6];
             setSelectedDate("");
-            fetch(`/api/plan/week?from=${from}&to=${to}`)
-              .then((r) => r.ok ? r.json() : null)
-              .then((d) => {
-                if (!d) return;
-                const entries = weekDates.flatMap((date) => {
-                  const dayEntries = (d.entries ?? []).filter((e: any) => e.date === date);
-                  if (dayEntries.length > 0) return dayEntries;
-                  const weekday = new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long" });
-                  return [{ entry_id: `empty-${date}`, entry_type: "empty", date, day: weekday, meal_slot: "", name: "", macros: { kcal: 0, protein: 0, carbs: 0, fat: 0, sugar: 0, sodium: 0 }, confirmed: true, notes: null, metadata: {} }];
-                });
-                setTodayCards(entries);
-              })
-              .catch(() => {});
+            fetchWeekCards().catch(() => {});
           }}
           className={`w-8 h-8 rounded-full text-[12px] font-semibold flex items-center justify-center transition-colors mr-1 ${
             selectedDate === ""

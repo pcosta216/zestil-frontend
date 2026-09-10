@@ -5,19 +5,21 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
-import SignOutButton from "./SignOutButton";
+import { ProfileTab } from "./ProfileTab";
 import { InstallBanner } from "@/components/InstallBanner";
-import type { RecipeCollection, Collection } from "@/lib/supabase/queries";
+import { UserAvatar } from "@/components/UserAvatar";
+import type { RecipeCollection, Collection, UserProfile } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
 
 interface Props {
-  user: { id: string; email: string; initials: string };
+  user: { id: string; email: string };
   initialRecipes: RecipeCollection[];
   initialCollections: Collection[];
+  profile: UserProfile | null;
 }
 
-export function AppShell({ user, initialRecipes, initialCollections }: Props) {
+export function AppShell({ user, initialRecipes, initialCollections, profile }: Props) {
   const searchParams = useSearchParams();
   const router = useRouter();
   const activeTab = (searchParams.get("tab") as Tab) ?? "explore";
@@ -48,10 +50,12 @@ export function AppShell({ user, initialRecipes, initialCollections }: Props) {
               Week of {currentWeekLabel()}
             </span>
           )}
-          {activeTab === "saved" && <SignOutButton />}
-          <div className="w-8 h-8 rounded-full bg-green-mid flex items-center justify-center text-[12px] font-medium text-green-dark">
-            {user.initials}
-          </div>
+          <UserAvatar
+            pictureUrl={profile?.picture_url ?? null}
+            displayName={profile?.display_name?.trim() || null}
+            email={profile?.email?.trim() || user.email}
+            size={32}
+          />
         </div>
       </header>
 
@@ -65,7 +69,10 @@ export function AppShell({ user, initialRecipes, initialCollections }: Props) {
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <SavedTab recipes={recipes} />
         </div>
-        <div className={["groceries", "profile"].includes(activeTab) ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
+        <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+          <ProfileTab profile={profile} fallbackEmail={user.email} />
+        </div>
+        <div className={activeTab === "groceries" ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
           <span className="text-3xl">🌱</span>
           <p className="text-sm">Coming soon</p>
         </div>

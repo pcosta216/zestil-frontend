@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { getRecipes, getCollections } from "@/lib/supabase/queries";
+import { getRecipes, getCollections, getUserProfile } from "@/lib/supabase/queries";
 import { AppShell } from "./AppShell";
 
 export default async function RecipesPage() {
@@ -12,18 +12,19 @@ export default async function RecipesPage() {
 
   if (!user) redirect("/login");
 
-  const [recipes, collections] = await Promise.all([
+  const [recipes, collections, profile] = await Promise.all([
     getRecipes(user.id),
     getCollections(user.id).catch((e) => { console.error("[getCollections] failed:", e?.message); return []; }),
+    getUserProfile(user.id).catch((e) => { console.error("[getUserProfile] failed:", e?.message); return null; }),
   ]);
-  const initials = user.email?.slice(0, 2).toUpperCase() ?? "??";
 
   return (
     <Suspense>
       <AppShell
-        user={{ id: user.id, email: user.email ?? "", initials }}
+        user={{ id: user.id, email: user.email ?? "" }}
         initialRecipes={recipes}
         initialCollections={collections}
+        profile={profile}
       />
     </Suspense>
   );

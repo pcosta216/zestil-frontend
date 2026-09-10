@@ -113,3 +113,57 @@ export async function getRecipe(
 
   return { ...data[0], collection_names };
 }
+
+/**
+ * Public storage bucket the profile pictures live in, and the folder inside it
+ * holding them. Only consulted when `picture_id` is a path, not a full URL.
+ */
+export const PROFILE_PICTURE_BUCKET = "userpictures";
+const PROFILE_PICTURE_FOLDER = "pictures";
+
+export type UserProfile = {
+  display_name: string | null;
+  email: string | null;
+  /** `picture_id` resolved to something an <img> can load, or null. */
+  picture_url: string | null;
+};
+
+/**
+ * `picture_id` holds either a full URL or a path inside PROFILE_PICTURE_BUCKET.
+ * A bare filename is taken to be in PROFILE_PICTURE_FOLDER — the stored names
+ * carry their own extension (`.jpg`, `.jpeg`), so the filename has to come from
+ * the column. Anything else resolves to null and the UI falls back to initials.
+ */
+function resolvePictureUrl(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  pictureId: unknown
+): string | null {
+  if (typeof pictureId !== "string") return null;
+  const value = pictureId.trim();
+  if (!value) return null;
+
+  if (/^https?:\/\//i.test(value)) return value;
+
+  const path = value.replace(/^\/+/, "");
+  const { data } = supabase.storage
+    .from(PROFILE_PICTURE_BUCKET)
+    .getPublicUrl(path.includes("/") ? path : `${PROFILE_PICTURE_FOLDER}/${path}`);
+  return data.publicUrl || null;
+}
+
+export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tbl_user_profiles")
+    .select("display_name, email, picture_id")
+    .eq("account_key", userId)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  return {
+    display_name: data.display_name ?? null,
+    email: data.email ?? null,
+    picture_url: resolvePictureUrl(supabase, data.picture_id),
+  };
+}
