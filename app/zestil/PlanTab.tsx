@@ -61,7 +61,17 @@ type UserMessage = {
   content: string;
 };
 
-type Message = AgentMessage | UserMessage;
+// A day (or week) of plan data, appended to the transcript when the user picks from the date
+// strip. Deliberately a frozen snapshot: the cards are the DB rows as they were at that moment, so
+// scrolling back shows the history of what was looked at rather than a live-updating panel.
+type DayViewMessage = {
+  id: string;
+  type: "dayview";
+  label: string;
+  cards: MealCard[];
+};
+
+type Message = AgentMessage | UserMessage | DayViewMessage;
 type HistoryEntry = { role: "user" | "agent"; content: string };
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -420,7 +430,6 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const todayBtnRef    = useRef<HTMLButtonElement>(null);
 
   const [selectedDate,    setSelectedDate]    = useState(() => new Date().toLocaleDateString("en-CA"));
-  const [todayCards,      setTodayCards]      = useState<MealCard[]>([]);
   const [datesWithEntries, setDatesWithEntries] = useState<Set<string>>(new Set());
   const [messages, setMessages]         = useState<Message[]>(INITIAL_MESSAGES);
   const [isTyping, setIsTyping]         = useState(false);
@@ -446,6 +455,19 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   const weekStartDay                    = useRef<number>(0);
   const bannerTimer                     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextScroll                  = useRef(false);
+  // Handlers act on one specific block by id; reading it from a ref keeps the state updaters pure
+  // and keeps the handlers out of every render's dependency churn.
+  const messagesRef                     = useRef<Message[]>([]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  function blockCards(msg: Message | undefined): MealCard[] | undefined {
+    if (!msg) return undefined;
+    return msg.type === "dayview" ? msg.cards : msg.type === "agent" ? msg.mealCards : undefined;
+  }
+
+  function withBlockCards(msg: Message, cards: MealCard[]): Message {
+    return msg.type === "dayview" ? { ...msg, cards } : msg.type === "agent" ? { ...msg, mealCards: cards } : msg;
+  }
 
   function showBanner(b: { type: "success" | "info" | "error"; message: string }) {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
@@ -487,18 +509,17 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
+  // Strip dots track the DB, not the transcript — every fetch reconciles the dates it covered.
+  const syncDots = useCallback((cards: MealCard[], dates: string[]) => {
     setDatesWithEntries(prev => {
       const next = new Set(prev);
-      const dateSet = new Set(todayCards.map(c => c.date).filter(Boolean));
-      for (const date of dateSet) {
-        const hasReal = todayCards.some(c => c.date === date && c.entry_type !== "empty");
-        if (hasReal) next.add(date);
+      for (const date of dates) {
+        if (cards.some(c => c.date === date && c.entry_type !== "empty")) next.add(date);
         else next.delete(date);
       }
       return next;
     });
-  }, [todayCards]);
+  }, []);
 
   useEffect(() => {
     fetch("/api/goals")
@@ -519,20 +540,35 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
   }, [messages, isTyping]);
 
-  const fetchDayCards = useCallback(async (date: string) => {
+  // Reads one day. Returns the cards rather than committing them, so callers can decide whether to
+  // append a new block or patch an existing one.
+  const fetchDay = useCallback(async (date: string): Promise<MealCard[] | null> => {
     const res = await fetch(`/api/plan/today?date=${date}`);
-    if (!res.ok) return;
+    if (!res.ok) return null;
     const data = await res.json();
-    if (data?.date) {
-      activeDate.current = data.date;
-      const entries = data.entries?.length ? data.entries : [emptyCard(data.date)];
-      setTodayCards(entries);
-    }
-  }, []);
+    if (!data?.date) return null;
+    const cards: MealCard[] = data.entries?.length ? data.entries : [emptyCard(data.date)];
+    syncDots(cards, [data.date]);
+    return cards;
+  }, [syncDots]);
 
-  // The 7-day equivalent of fetchDayCards. Shared by the "w" button and by any refresh that
-  // happens while week view is active — refetching a single day there would drop the other six.
-  const fetchWeekCards = useCallback(async () => {
+  const appendDayView = useCallback(async (date: string, { setActive = true } = {}) => {
+    const cards = await fetchDay(date);
+    if (!cards) return;
+    if (setActive) activeDate.current = date;
+    setMessages(prev => [...prev, {
+      id:    `day-${date}-${Date.now()}`,
+      type:  "dayview",
+      label: date === todayStr
+        ? "Today"
+        : new Date(date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }),
+      cards,
+    }]);
+  }, [fetchDay, todayStr]);
+
+  // The 7-day equivalent of appendDayView. Shared by the "w" button and by any refresh that
+  // happens while week view is active — appending a single day there would lose the other six.
+  const appendWeekView = useCallback(async ({ setActive = true } = {}) => {
     const base = new Date(); base.setHours(0, 0, 0, 0);
     const dow  = base.getDay();
     const startOffset = weekStartDay.current === 1
@@ -549,11 +585,20 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     if (!res.ok) return;
     const data = await res.json();
     if (!data) return;
-    setTodayCards(weekDates.flatMap((date) => {
+    const cards = weekDates.flatMap((date) => {
       const dayEntries = (data.entries ?? []).filter((e: MealCard) => e.date === date);
       return dayEntries.length > 0 ? dayEntries : [emptyCard(date)];
-    }));
-  }, []);
+    });
+    syncDots(cards, weekDates);
+    // Seven days on screen means there is no single day for the agent to act on implicitly.
+    if (setActive) activeDate.current = null;
+    setMessages(prev => [...prev, {
+      id:    `week-${weekDates[0]}-${Date.now()}`,
+      type:  "dayview",
+      label: "This Week",
+      cards,
+    }]);
+  }, [syncDots]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || isTyping) return;
@@ -626,12 +671,13 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
 
       setMessages((prev) => [...prev, agentMsg]);
 
-      // Refresh whatever view is on screen if the agent touched it. Week view (selectedDate === "")
-      // never matches a date, so any touched day is reason to refetch the whole week.
+      // If the agent touched the day the user is following, append a fresh block for it below the
+      // reply. setActive:false because activeDate was just resolved from the response above and the
+      // append must not overwrite that decision — notably the multi-day case that clears it.
       if (selectedDate === "") {
-        if (datesInResponse.length) fetchWeekCards().catch(() => {});
+        if (datesInResponse.length) appendWeekView({ setActive: false }).catch(() => {});
       } else if (datesInResponse.includes(selectedDate)) {
-        fetchDayCards(selectedDate).catch(() => {});
+        appendDayView(selectedDate, { setActive: false }).catch(() => {});
       }
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });
@@ -652,44 +698,35 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     }
     // selectedDate must be a dep: the refresh above reads it, and with only [isTyping] the
     // memoised closure kept whichever date was selected when isTyping last flipped.
-  }, [isTyping, selectedDate, fetchDayCards, fetchWeekCards]);
+  }, [isTyping, selectedDate, appendDayView, appendWeekView]);
 
   useEffect(() => {
-    fetchDayCards(new Date().toLocaleDateString("en-CA"))
-      .then(() => setMessages([WELCOME_MESSAGE]))
-      .catch(() => setMessages([WELCOME_MESSAGE]));
+    setMessages([WELCOME_MESSAGE]);
+    appendDayView(new Date().toLocaleDateString("en-CA")).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDeleteEntry = useCallback(async (entryId: string) => {
+  // Blocks are frozen snapshots, so a delete only rewrites the block it was clicked in. Earlier
+  // blocks for the same date keep showing what they showed when they were appended.
+  const handleDeleteEntry = useCallback(async (entryId: string, msgId: string) => {
     const res = await fetch(`/api/plan/entries/${entryId}`, { method: "DELETE" });
-    if (res.ok) {
-      skipNextScroll.current = true;
-      setTodayCards(prev => {
-        const removed = prev.find(c => c.entry_id === entryId);
-        const rest    = prev.filter(c => c.entry_id !== entryId);
-        if (removed && !rest.some(c => c.date === removed.date)) {
-          return [...rest, { ...removed, entry_type: "empty" }];
-        }
-        return rest;
-      });
-      setMessages(prev => prev.map(msg => {
-        if (msg.type !== "agent") return msg;
-        const cards   = (msg as AgentMessage).mealCards;
-        if (!cards)   return msg;
-        const removed = cards.find(c => c.entry_id === entryId);
-        const rest    = cards.filter(c => c.entry_id !== entryId);
-        const next    = removed && !rest.some(c => c.date === removed.date)
-          ? [...rest, { ...removed, entry_type: "empty" }]
-          : rest;
-        return { ...msg, mealCards: next };
-      }));
-    } else {
+    if (!res.ok) {
       showBanner({ type: "error", message: "Couldn't delete the entry. Please try again." });
+      return;
     }
-  }, [showBanner]);
+    const cards = blockCards(messagesRef.current.find(m => m.id === msgId));
+    if (!cards) return;
+    const removed = cards.find(c => c.entry_id === entryId);
+    const rest    = cards.filter(c => c.entry_id !== entryId);
+    const next    = removed && !rest.some(c => c.date === removed.date)
+      ? [...rest, { ...removed, entry_type: "empty" }]
+      : rest;
+    skipNextScroll.current = true;
+    setMessages(prev => prev.map(msg => (msg.id === msgId ? withBlockCards(msg, next) : msg)));
+    if (removed?.date) syncDots(next, [removed.date]);
+  }, [showBanner, syncDots]);
 
-  const handleOptimise = useCallback(async (date: string) => {
+  const handleOptimise = useCallback(async (date: string, msgId: string) => {
     setOptimisingDate(date);
     const startedAt = performance.now();
     try {
@@ -710,10 +747,18 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         showBanner({ type: "error", message: data.error ?? "Optimisation failed." });
         return;
       }
-      skipNextScroll.current = true;
-      // Week view holds all 7 days in the same state; refetching just `date` would blank the rest.
-      if (selectedDate === "") await fetchWeekCards();
-      else                     await fetchDayCards(date);
+      // Frozen-snapshot rule: refresh only the block the button was pressed in. A week block holds
+      // seven days, so splice the optimised day back in rather than replacing the whole block.
+      const fresh = await fetchDay(date);
+      if (fresh) {
+        skipNextScroll.current = true;
+        setMessages(prev => prev.map(msg => {
+          if (msg.id !== msgId) return msg;
+          const cards = blockCards(msg);
+          if (!cards) return msg;
+          return withBlockCards(msg, [...cards.filter(c => c.date !== date), ...fresh]);
+        }));
+      }
       showBanner({ type: "success", message: `Optimised ${date} — ${data.summary?.slice(0, 80) ?? "done"}.` });
     } catch (e) {
       console.log(`[optimise] ${date} failed after ${Math.round(performance.now() - startedAt)}ms`, e);
@@ -721,25 +766,27 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
     } finally {
       setOptimisingDate(null);
     }
-  }, [showBanner, fetchDayCards, fetchWeekCards, selectedDate]);
+  }, [showBanner, fetchDay]);
 
   return (
     <>
       <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-3.5">
-        <div className="text-[11px] font-medium text-text-muted uppercase tracking-wide text-center my-1">
-          {selectedDate === ""
-            ? "This Week"
-            : selectedDate === todayStr
-            ? "Today"
-            : new Date(selectedDate + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
-        </div>
-
-        {todayCards.length > 0 && (
-          <DayGrids cards={todayCards} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} onOptimise={handleOptimise} optimisingDate={optimisingDate} />
-        )}
-
         {messages.map((msg) =>
-          msg.type === "user" ? (
+          msg.type === "dayview" ? (
+            <div key={msg.id} className="flex flex-col gap-2">
+              <div className="text-[11px] font-medium text-text-muted uppercase tracking-wide text-center my-1">
+                {msg.label}
+              </div>
+              <DayGrids
+                cards={msg.cards}
+                goals={macroGoals}
+                mealSlots={mealSlots}
+                onDeleteEntry={(entryId) => handleDeleteEntry(entryId, msg.id)}
+                onOptimise={(date) => handleOptimise(date, msg.id)}
+                optimisingDate={optimisingDate}
+              />
+            </div>
+          ) : msg.type === "user" ? (
             <div
               key={msg.id}
               className="bg-green-primary text-white text-[13.5px] leading-relaxed self-end max-w-[82%] px-4 py-3"
@@ -882,7 +929,14 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                 </>
               )}
               {(msg.mealCards?.length ?? 0) > 0 && (
-                <DayGrids cards={msg.mealCards!} goals={macroGoals} mealSlots={mealSlots} onDeleteEntry={handleDeleteEntry} onOptimise={handleOptimise} optimisingDate={optimisingDate} />
+                <DayGrids
+                  cards={msg.mealCards!}
+                  goals={macroGoals}
+                  mealSlots={mealSlots}
+                  onDeleteEntry={(entryId) => handleDeleteEntry(entryId, msg.id)}
+                  onOptimise={(date) => handleOptimise(date, msg.id)}
+                  optimisingDate={optimisingDate}
+                />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
@@ -911,7 +965,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
         <button
           onClick={() => {
             setSelectedDate("");
-            fetchWeekCards().catch(() => {});
+            appendWeekView().catch(() => {});
           }}
           className={`w-8 h-8 rounded-full text-[12px] font-semibold flex items-center justify-center transition-colors mr-1 ${
             selectedDate === ""
@@ -929,7 +983,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
               <button
                 key={dateStr}
                 ref={isToday ? todayBtnRef : undefined}
-                onClick={() => { setSelectedDate(dateStr); fetchDayCards(dateStr); }}
+                onClick={() => {
+                  setSelectedDate(dateStr);
+                  appendDayView(dateStr).catch(() => {});
+                }}
                 className="flex-shrink-0 flex flex-col items-center gap-[2px] group"
               >
                 <span className={`w-6 h-6 rounded-full text-[12px] font-medium flex items-center justify-center transition-colors ${
