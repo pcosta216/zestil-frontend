@@ -1,0 +1,61 @@
+# =============================================================================
+# Curated allergy -> macro-category exclusions — SEED SOURCE, not read live.
+# =============================================================================
+# Authoring source for curated:allergy_macro.exclusions. One entry per
+# n_allergies value (all 8), each a plain { protein: [...], carbs: [...],
+# fat: [...] } list of category slugs to hard-exclude from the matching
+# n_protein/carb/fat_exclusion_cards deck. No `allowed` side (unlike
+# diet_macro_curated_data.yaml) — this table only ever contributes to the
+# excluded set, via UNION across every reported allergy (see
+# options-filter.ts's hard_exclude_sources handling: each allergy is an
+# independent hard block, not a blendable preference like a diet style, so
+# one allergy never neutralizes another).
+#
+# A category only appears here when the allergen genuinely maps onto one of
+# the 8 fixed protein / 8 carb / 8 fat categories those decks already show
+# (e.g. "eggs" allergy -> the literal "eggs" protein category). Allergens
+# with no such direct category (histamine-adjacent stuff, etc.) simply
+# aren't represented in these three decks at all, so there's nothing to
+# exclude from them.
+# =============================================================================
+
+allergy_macro_exclusions:
+  nuts:
+    protein: []
+    carbs: []
+    fat: [nut_seed_fats]
+
+  gluten:
+    protein: [seitan]   # seitan is near-pure wheat gluten — a genuine hard block, not optional
+    carbs: [bread, pasta]
+    fat: []
+
+  dairy:
+    protein: [dairy_protein]
+    carbs: []
+    fat: [butter, ghee]
+
+  shellfish:
+    protein: [shellfish]
+    carbs: []
+    fat: []
+
+  soy:
+    protein: [plant_based_tofu]
+    carbs: []
+    fat: []
+
+  eggs:
+    protein: [eggs]
+    carbs: []
+    fat: []
+
+  none:
+    protein: []
+    carbs: []
+    fat: []
+
+  other:
+    protein: []
+    carbs: []
+    fat: []

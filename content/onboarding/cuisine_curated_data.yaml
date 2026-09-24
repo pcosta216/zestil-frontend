@@ -1,0 +1,256 @@
+# =============================================================================
+# Curated cuisine/dish content — SEED SOURCE, not read live by the app.
+# =============================================================================
+# This file is the authoring source for two DB sections in
+# tbl_onboarding_content: curated:cuisine.sub_cuisines and
+# curated:cuisine.dishes. The onboarding engine reads those DB rows at
+# runtime, not this file — edit this file, then regenerate the migration
+# seed (see scripts/onboarding-seed/generate-seed-sql.mjs), rather than
+# expecting an edit here to take effect on its own.
+#
+# Same {value, label} contract as every other options list in this flow —
+# value is the slug the engine matches on, label is exact display text.
+# id_order is assigned at generation time from array position (10, 20, 30, ...).
+#
+# NOT meant to be exhaustive at the cuisine/sub-cuisine level. All 7 non-
+# "other" values from n_cuisine_broad have a sub_cuisines entry here
+# (asian, european, american, latin_american, middle_eastern, mediterranean,
+# african), but coverage within each is partial — anything missing (Bolivian,
+# Austrian, most sub-cuisines under any given broad category, etc.) is
+# expected to fall through to the DB tool or web search — the intended
+# long-tail path, not a bug. Every sub_cuisine option here has a matching
+# dish list — no sub-cuisine should dead-end into an empty dish deck.
+# =============================================================================
+
+sub_cuisines:
+  asian:
+    - { value: thai, label: "Thai" }
+    - { value: indian, label: "Indian" }
+    - { value: chinese, label: "Chinese" }
+    - { value: japanese, label: "Japanese" }
+    - { value: vietnamese, label: "Vietnamese" }
+    - { value: korean, label: "Korean" }
+    - { value: other, label: "Other" }
+
+  european:
+    - { value: italian, label: "Italian" }
+    - { value: french, label: "French" }
+    - { value: spanish, label: "Spanish" }
+    - { value: portuguese, label: "Portuguese" }
+    - { value: greek, label: "Greek" }
+    - { value: other, label: "Other" }
+
+  american:
+    - { value: classic_american, label: "Classic American" }
+    - { value: southern_soul_food, label: "Southern / soul food" }
+    - { value: tex_mex, label: "Tex-Mex" }
+    - { value: other, label: "Other" }
+
+  latin_american:
+    - { value: mexican, label: "Mexican" }
+    - { value: brazilian, label: "Brazilian" }
+    - { value: peruvian, label: "Peruvian" }
+    - { value: other, label: "Other" }
+
+  middle_eastern:
+    - { value: lebanese, label: "Lebanese" }
+    - { value: turkish, label: "Turkish" }
+    - { value: persian, label: "Persian" }
+    - { value: other, label: "Other" }
+
+  # mediterranean: not a distinct geographic region from the ones above —
+  # deliberately overlaps with european/middle_eastern/african.
+  mediterranean:
+    - { value: greek, label: "Greek" }
+    - { value: turkish, label: "Turkish" }
+    - { value: lebanese, label: "Lebanese" }
+    - { value: spanish, label: "Spanish" }
+    - { value: other, label: "Other" }
+
+  african:
+    - { value: moroccan, label: "Moroccan" }
+    - { value: ethiopian, label: "Ethiopian" }
+    - { value: nigerian, label: "Nigerian" }
+    - { value: south_african, label: "South African" }
+    - { value: angolan, label: "Angolan" }
+    - { value: other, label: "Other" }
+
+dishes:
+  # -- asian --
+  thai:
+    - { value: pad_thai, label: "Pad Thai" }
+    - { value: green_curry, label: "Green curry" }
+    - { value: tom_yum, label: "Tom yum" }
+    - { value: thai_fried_rice, label: "Fried rice" }
+    - { value: other, label: "Other" }
+
+  indian:
+    - { value: biryani, label: "Biryani" }
+    - { value: chana_masala, label: "Chana masala" }
+    - { value: dal, label: "Dal" }
+    - { value: samosas, label: "Samosas" }
+    - { value: other, label: "Other" }
+
+  chinese:
+    - { value: fried_rice, label: "Fried rice" }
+    - { value: dumplings, label: "Dumplings" }
+    - { value: kung_pao_chicken, label: "Kung Pao chicken" }
+    - { value: mapo_tofu, label: "Mapo tofu" }
+    - { value: other, label: "Other" }
+
+  japanese:
+    - { value: sushi, label: "Sushi" }
+    - { value: ramen, label: "Ramen" }
+    - { value: tempura, label: "Tempura" }
+    - { value: okonomiyaki, label: "Okonomiyaki" }
+    - { value: other, label: "Other" }
+
+  vietnamese:
+    - { value: pho, label: "Pho" }
+    - { value: banh_mi, label: "Banh mi" }
+    - { value: spring_rolls, label: "Spring rolls" }
+    - { value: bun_cha, label: "Bun cha" }
+    - { value: other, label: "Other" }
+
+  korean:
+    - { value: bibimbap, label: "Bibimbap" }
+    - { value: kimchi_jjigae, label: "Kimchi jjigae" }
+    - { value: bulgogi, label: "Bulgogi" }
+    - { value: korean_fried_chicken, label: "Korean fried chicken" }
+    - { value: other, label: "Other" }
+
+  # -- european --
+  italian:
+    - { value: pizza, label: "Pizza" }
+    - { value: carbonara, label: "Carbonara" }
+    - { value: lasagna, label: "Lasagna" }
+    - { value: risotto, label: "Risotto" }
+    - { value: other, label: "Other" }
+
+  french:
+    - { value: coq_au_vin, label: "Coq au vin" }
+    - { value: ratatouille, label: "Ratatouille" }
+    - { value: quiche, label: "Quiche" }
+    - { value: croissant, label: "Croissant" }
+    - { value: other, label: "Other" }
+
+  spanish:
+    - { value: paella, label: "Paella" }
+    - { value: tortilla_espanola, label: "Tortilla española" }
+    - { value: gazpacho, label: "Gazpacho" }
+    - { value: patatas_bravas, label: "Patatas bravas" }
+    - { value: other, label: "Other" }
+
+  portuguese:
+    - { value: bacalhau, label: "Bacalhau" }
+    - { value: francesinha, label: "Francesinha" }
+    - { value: caldo_verde, label: "Caldo verde" }
+    - { value: pastel_de_nata, label: "Pastel de nata" }
+    - { value: other, label: "Other" }
+
+  greek:
+    - { value: moussaka, label: "Moussaka" }
+    - { value: souvlaki, label: "Souvlaki" }
+    - { value: greek_salad, label: "Greek salad" }
+    - { value: spanakopita, label: "Spanakopita" }
+    - { value: other, label: "Other" }
+
+  # -- american --
+  classic_american:
+    - { value: cheeseburger, label: "Cheeseburger" }
+    - { value: mac_and_cheese, label: "Mac and cheese" }
+    - { value: bbq_ribs, label: "BBQ ribs" }
+    - { value: other, label: "Other" }
+
+  southern_soul_food:
+    - { value: fried_chicken, label: "Fried chicken" }
+    - { value: collard_greens, label: "Collard greens" }
+    - { value: cornbread, label: "Cornbread" }
+    - { value: gumbo, label: "Gumbo" }
+    - { value: other, label: "Other" }
+
+  tex_mex:
+    - { value: tex_mex_fajitas, label: "Fajitas" }
+    - { value: chili_con_carne, label: "Chili con carne" }
+    - { value: quesadillas, label: "Quesadillas" }
+    - { value: nachos, label: "Nachos" }
+    - { value: other, label: "Other" }
+
+  # -- latin_american --
+  mexican:
+    - { value: tacos, label: "Tacos" }
+    - { value: enchiladas, label: "Enchiladas" }
+    - { value: guacamole, label: "Guacamole" }
+    - { value: mole, label: "Mole" }
+    - { value: other, label: "Other" }
+
+  brazilian:
+    - { value: feijoada, label: "Feijoada" }
+    - { value: picanha, label: "Picanha" }
+    - { value: pao_de_queijo, label: "Pão de queijo" }
+    - { value: coxinha, label: "Coxinha" }
+    - { value: other, label: "Other" }
+
+  peruvian:
+    - { value: ceviche, label: "Ceviche" }
+    - { value: lomo_saltado, label: "Lomo saltado" }
+    - { value: aji_de_gallina, label: "Aji de gallina" }
+    - { value: anticuchos, label: "Anticuchos" }
+    - { value: other, label: "Other" }
+
+  # -- middle_eastern --
+  lebanese:
+    - { value: hummus, label: "Hummus" }
+    - { value: falafel, label: "Falafel" }
+    - { value: tabbouleh, label: "Tabbouleh" }
+    - { value: shawarma, label: "Shawarma" }
+    - { value: other, label: "Other" }
+
+  turkish:
+    - { value: kebab, label: "Kebab" }
+    - { value: baklava, label: "Baklava" }
+    - { value: borek, label: "Börek" }
+    - { value: manti, label: "Manti" }
+    - { value: other, label: "Other" }
+
+  persian:
+    - { value: kabab_koobideh, label: "Kabab koobideh" }
+    - { value: tahdig, label: "Tahdig" }
+    - { value: fesenjan, label: "Fesenjan" }
+    - { value: ghormeh_sabzi, label: "Ghormeh sabzi" }
+    - { value: other, label: "Other" }
+
+  # -- african --
+  moroccan:
+    - { value: tagine, label: "Tagine" }
+    - { value: couscous, label: "Couscous" }
+    - { value: harira, label: "Harira" }
+    - { value: pastilla, label: "Pastilla" }
+    - { value: other, label: "Other" }
+
+  ethiopian:
+    - { value: doro_wat, label: "Doro wat" }
+    - { value: tibs, label: "Tibs" }
+    - { value: kitfo, label: "Kitfo" }
+    - { value: shiro, label: "Shiro" }
+    - { value: other, label: "Other" }
+
+  nigerian:
+    - { value: jollof_rice, label: "Jollof rice" }
+    - { value: egusi_soup, label: "Egusi soup" }
+    - { value: suya, label: "Suya" }
+    - { value: pounded_yam, label: "Pounded yam" }
+    - { value: other, label: "Other" }
+
+  south_african:
+    - { value: bobotie, label: "Bobotie" }
+    - { value: biltong, label: "Biltong" }
+    - { value: boerewors, label: "Boerewors" }
+    - { value: bunny_chow, label: "Bunny chow" }
+    - { value: other, label: "Other" }
+
+  angolan:
+    - { value: muamba_de_galinha, label: "Muamba de galinha (peanut stew)" }
+    - { value: calulu, label: "Calulu" }
+    - { value: funge, label: "Funge" }
+    - { value: other, label: "Other" }

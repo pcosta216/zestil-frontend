@@ -1,0 +1,89 @@
+# =============================================================================
+# Curated diet → macro implications — SEED SOURCE, not read live by the app.
+# =============================================================================
+# Authoring source for curated:diet_macro.exclusions. One entry per
+# n_diet_style_cards value (all 8), each holding protein/carbs/fat blocks
+# of {excluded, allowed} category slugs. Read by n_protein/carb/fat_
+# exclusion_cards' options_filter (macro_category picks the block).
+#
+# excluded/allowed are complementary for every diet × every macro category
+# (together cover the full option set for that macro — protein has 10 items
+# now that seitan/lentils_legumes were added, carbs and fat still 8 each —
+# checked programmatically by validate-flow.mjs, not just by hand).
+#
+# Combining multiple selected diets: PLAIN INTERSECTION of `excluded` across
+# every selected diet, no exceptions — see options-filter.ts and design doc
+# §4e for the full reasoning (multiple diets = "draws from multiple
+# styles," not "follows an ultra-restrictive fusion"; a single diet with no
+# opinion on a macro neutralizes every other selected diet's exclusions for
+# that macro, since intersecting with an empty set is always empty).
+#
+# NOTE: unlike the other three curated files, these excluded/allowed lists
+# are plain category slugs, not {value, label} options — the labels for
+# poultry/red_meat/etc. live on n_protein_exclusion_cards' own `node:*`
+# content row (and carb/fat's respective rows), per the disclosure
+# mechanism's "pulled from this node's own options, never reconstructed
+# from slug" rule. No id_order needed here for the same reason.
+# =============================================================================
+
+diet_macro_exclusions:
+
+  mediterranean:
+    protein: { excluded: [], allowed: [poultry, red_meat, pork, seafood, shellfish, plant_based_tofu, eggs, dairy_protein, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [], allowed: [olive_oil, butter, ghee, lard, tallow, coconut_oil, seed_oil, nut_seed_fats] }
+    # no implications on any macro — emphasis/moderation, not elimination.
+    # fat's excluded:[] is a deliberate judgment call (olive-oil association
+    # could argue for excluding seed_oil, left unrestricted for consistency).
+
+  paleo:
+    protein: { excluded: [dairy_protein, plant_based_tofu, seitan, lentils_legumes], allowed: [poultry, red_meat, pork, seafood, shellfish, eggs] }
+    carbs:   { excluded: [rice, bread, pasta, oats, quinoa, corn, legumes], allowed: [potatoes] }
+    fat:     { excluded: [butter, ghee, seed_oil], allowed: [olive_oil, lard, tallow, coconut_oil, nut_seed_fats] }
+    # the one diet with real implications on all three macros — but note fat
+    # ALLOWS lard/tallow ("ancestral" fats), unlike butter/ghee/seed_oil.
+    # seitan (wheat gluten) and lentils_legumes both excluded for the same
+    # reason paleo's carbs already exclude legumes/grains — neither is paleo.
+
+  vegetarian:
+    protein: { excluded: [poultry, red_meat, pork, seafood, shellfish], allowed: [plant_based_tofu, eggs, dairy_protein, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [lard, tallow], allowed: [olive_oil, butter, ghee, coconut_oil, seed_oil, nut_seed_fats] }
+    # eggs/dairy stay allowed (protein AND fat) — only meat-rendered fats excluded.
+
+  vegan:
+    protein: { excluded: [poultry, red_meat, pork, seafood, shellfish, eggs, dairy_protein], allowed: [plant_based_tofu, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [butter, ghee, lard, tallow], allowed: [olive_oil, coconut_oil, seed_oil, nut_seed_fats] }
+    # every animal-derived protein AND fat excluded by definition — seitan and
+    # lentils_legumes are both fully plant-based, so join plant_based_tofu as allowed.
+
+  pescatarian:
+    protein: { excluded: [poultry, red_meat, pork], allowed: [seafood, shellfish, plant_based_tofu, eggs, dairy_protein, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [lard, tallow], allowed: [olive_oil, butter, ghee, coconut_oil, seed_oil, nut_seed_fats] }
+    # same fat reasoning as vegetarian.
+
+  keto:
+    protein: { excluded: [lentils_legumes], allowed: [poultry, red_meat, pork, seafood, shellfish, plant_based_tofu, eggs, dairy_protein, seitan] }
+    carbs:   { excluded: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes], allowed: [] }
+    fat:     { excluded: [], allowed: [olive_oil, butter, ghee, lard, tallow, coconut_oil, seed_oil, nut_seed_fats] }
+    # no fat implications — carbs are the macro keto actually restricts, and
+    # a legitimate zero-allowed case there, not a bug. lentils_legumes is the
+    # one protein-side exception: it's the same high-carb legume keto's own
+    # carbs list already excludes, just offered again as a "protein" — kept
+    # consistent rather than contradicting keto's own carb restriction.
+    # seitan (near-pure wheat gluten, low-carb) stays allowed.
+
+  other:
+    protein: { excluded: [], allowed: [poultry, red_meat, pork, seafood, shellfish, plant_based_tofu, eggs, dairy_protein, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [], allowed: [olive_oil, butter, ghee, lard, tallow, coconut_oil, seed_oil, nut_seed_fats] }
+    # free-text custom entry — no way to know its macro implications, so no exclusions
+    # (same "silence neutralizes" reasoning as balanced_no_specific_style below).
+
+  balanced_no_specific_style:
+    protein: { excluded: [], allowed: [poultry, red_meat, pork, seafood, shellfish, plant_based_tofu, eggs, dairy_protein, seitan, lentils_legumes] }
+    carbs:   { excluded: [], allowed: [rice, bread, pasta, potatoes, oats, quinoa, corn, legumes] }
+    fat:     { excluded: [], allowed: [olive_oil, butter, ghee, lard, tallow, coconut_oil, seed_oil, nut_seed_fats] }
+    # no stated style, no implications on any macro.

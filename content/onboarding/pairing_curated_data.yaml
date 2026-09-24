@@ -1,0 +1,396 @@
+# =============================================================================
+# Curated pairing content — SEED SOURCE, not read live by the app.
+# =============================================================================
+# Authoring source for curated:pairing.sides. Nested cuisine_broad ->
+# cuisine_narrow -> dish, mirroring cuisine_curated_data.yaml's own
+# structure — but the nesting is ORGANIZATIONAL only, not a lookup key.
+# n_pairing_cards' sample_from samples by BROAD cuisine alone (the top
+# level); the engine doesn't care which cuisine_narrow bucket a dish sits
+# in when picking — it just needs "every dish under this broad cuisine,"
+# regardless of depth. The nesting exists so a human editing this file can
+# see which cuisine a dish conceptually belongs to and add new ones in the
+# right neighborhood, matching how cuisine_curated_data.yaml is organized.
+# Dish keys must be unique across the ENTIRE file, not just within one
+# cuisine branch — sample_from's cache (meal_planning_preferences.
+# pairing_sample) stores the sampled dish's bare `value`, so a collision
+# across branches would be ambiguous.
+#
+# This file is fully INDEPENDENT of cuisine_curated_data.yaml's own
+# `dishes` table — n_pairing_cards never reads favorite_dishes or
+# preferred_recipes, only taste_profile.cuisines (broad picks). A dish
+# curated here does not need a matching entry in cuisine_curated_data.yaml,
+# and vice versa; see pairing_cards_design.md §1 for why this node stopped
+# being "show cards for dishes you said you like" and became a sampled
+# preference-profiling exercise instead.
+#
+# Every dish has exactly 4 sides (a 4th was added across the board
+# specifically to give the multi_select screen format more signal per
+# screen than the original 3-option swipe-card version had).
+#
+# --- coverage — read this before assuming every cuisine works the same way ---
+# african (19 dishes) and asian (7) never need generate_pairing_cards'
+# top-up (a stub this phase — see engine.ts's resolveEntry sample_from
+# handling). european (4), american (3), middle_eastern (3), and
+# latin_american (2) fall short of a 6-dish share whenever picked alone;
+# mediterranean has NO dedicated pool at all (its dishes live under
+# european/middle_eastern per cuisine_curated_data.yaml's deliberate
+# sub-cuisine overlap), so a mediterranean-only sample currently relies
+# entirely on the (stub) top-up tool and will come up short this phase.
+# Expected, not a bug — same "grow curated coverage with usage data"
+# posture as every other curated file in this flow.
+#
+# --- the `_side` suffix ------------------------------------------------
+# A handful of side values carry a `_side` suffix (guacamole_side,
+# mac_and_cheese_side, falafel_side, hummus_side, tabbouleh_side,
+# spring_rolls_side, collard_greens_side, cornbread_side, pounded_yam_side,
+# egusi_soup_side, couscous_side, tagine_side, bbq_ribs_side, gumbo_side,
+# patatas_bravas_side, funge_side, muamba_de_galinha_side) purely to avoid
+# colliding with the SAME string used as a dish `value` elsewhere in this
+# same file (e.g. "falafel" is both a main dish and a common side for
+# hummus). Value-namespace uniqueness hack ONLY — never read/branched on
+# by the engine. Recipe resolution (once real tooling exists) MUST search
+# using the option's `label` ("Hummus"), never the raw `value`
+# ("hummus_side") — this phase writes recipe_uuid: null regardless (see
+# engine.ts's pairing_cards writeNodeAnswer branch), so this only matters
+# once resolve_recipe_uuid is actually implemented.
+# =============================================================================
+
+sides:
+
+  asian:
+
+    indian:
+      biryani:
+        main_label: "Biryani"
+        options:
+          - { value: raita, label: "Raita" }
+          - { value: papadum, label: "Papadum" }
+          - { value: mixed_pickle, label: "Mixed pickle" }
+          - { value: onion_salad, label: "Onion salad (kachumber)" }
+
+      chana_masala:
+        main_label: "Chana masala"
+        options:
+          - { value: basmati_rice, label: "Basmati rice" }
+          - { value: naan, label: "Naan" }
+          - { value: cucumber_raita, label: "Cucumber raita" }
+          - { value: papadum, label: "Papadum" }
+
+      dal:
+        main_label: "Dal"
+        options:
+          - { value: basmati_rice, label: "Basmati rice" }
+          - { value: naan, label: "Naan" }
+          - { value: papadum, label: "Papadum" }
+          - { value: mixed_pickle, label: "Mixed pickle" }
+
+    thai:
+      pad_thai:
+        main_label: "Pad Thai"
+        options:
+          - { value: spring_rolls_side, label: "Spring rolls" }
+          - { value: tom_yum_soup, label: "Tom yum soup" }
+          - { value: cucumber_salad, label: "Cucumber salad" }
+          - { value: peanut_sauce, label: "Peanut sauce" }
+
+      green_curry:
+        main_label: "Green curry"
+        options:
+          - { value: jasmine_rice, label: "Jasmine rice" }
+          - { value: spring_rolls_side, label: "Spring rolls" }
+          - { value: cucumber_salad, label: "Cucumber salad" }
+          - { value: sticky_rice, label: "Sticky rice" }
+
+    japanese:
+      sushi:
+        main_label: "Sushi"
+        options:
+          - { value: miso_soup, label: "Miso soup" }
+          - { value: edamame, label: "Edamame" }
+          - { value: seaweed_salad, label: "Seaweed salad" }
+          - { value: pickled_ginger, label: "Pickled ginger" }
+
+      ramen:
+        main_label: "Ramen"
+        options:
+          - { value: gyoza, label: "Gyoza" }
+          - { value: edamame, label: "Edamame" }
+          - { value: seaweed_salad, label: "Seaweed salad" }
+          - { value: soft_boiled_egg, label: "Soft-boiled egg" }
+
+  european:
+
+    italian:
+      pizza:
+        main_label: "Pizza"
+        options:
+          - { value: side_salad, label: "Side salad" }
+          - { value: garlic_bread, label: "Garlic bread" }
+          - { value: buffalo_wings, label: "Buffalo wings" }
+          - { value: caprese_salad, label: "Caprese salad" }
+
+      carbonara:
+        main_label: "Carbonara"
+        options:
+          - { value: side_salad, label: "Side salad" }
+          - { value: garlic_bread, label: "Garlic bread" }
+          - { value: roasted_vegetables, label: "Roasted vegetables" }
+          - { value: caprese_salad, label: "Caprese salad" }
+
+      lasagna:
+        main_label: "Lasagna"
+        options:
+          - { value: side_salad, label: "Side salad" }
+          - { value: garlic_bread, label: "Garlic bread" }
+          - { value: roasted_vegetables, label: "Roasted vegetables" }
+          - { value: caprese_salad, label: "Caprese salad" }
+
+    spanish:
+      # ambiguous placement — spanish is a sub_cuisine of both european AND
+      # mediterranean in cuisine_curated_data.yaml. Kept here only (matches
+      # that file's own `dishes` table grouping), not duplicated under
+      # mediterranean — mediterranean has no dedicated pool, see header.
+      paella:
+        main_label: "Paella"
+        options:
+          - { value: side_salad, label: "Side salad" }
+          - { value: crusty_bread, label: "Crusty bread" }
+          - { value: allioli, label: "Allioli" }
+          - { value: patatas_bravas_side, label: "Patatas bravas" }
+
+  american:
+
+    classic_american:
+      cheeseburger:
+        main_label: "Cheeseburger"
+        options:
+          - { value: french_fries, label: "French fries" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: onion_rings, label: "Onion rings" }
+          - { value: coleslaw, label: "Coleslaw" }
+
+      mac_and_cheese:
+        main_label: "Mac and cheese"
+        options:
+          - { value: side_salad, label: "Side salad" }
+          - { value: garlic_bread, label: "Garlic bread" }
+          - { value: collard_greens_side, label: "Collard greens" }
+          - { value: bbq_ribs_side, label: "BBQ ribs" }
+
+    southern_soul_food:
+      fried_chicken:
+        main_label: "Fried chicken"
+        options:
+          - { value: mac_and_cheese_side, label: "Mac and cheese" }
+          - { value: collard_greens_side, label: "Collard greens" }
+          - { value: cornbread_side, label: "Cornbread" }
+          - { value: gumbo_side, label: "Gumbo" }
+
+  latin_american:
+
+    mexican:
+      tacos:
+        main_label: "Tacos"
+        options:
+          - { value: mexican_rice, label: "Mexican rice" }
+          - { value: refried_beans, label: "Refried beans" }
+          - { value: guacamole_side, label: "Guacamole" }
+          - { value: pico_de_gallo, label: "Pico de gallo" }
+
+      enchiladas:
+        main_label: "Enchiladas"
+        options:
+          - { value: mexican_rice, label: "Mexican rice" }
+          - { value: refried_beans, label: "Refried beans" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: guacamole_side, label: "Guacamole" }
+
+  middle_eastern:
+    # lebanese/turkish are also mediterranean sub_cuisines (deliberate
+    # overlap in cuisine_curated_data.yaml). Kept here only, not duplicated
+    # under mediterranean — see header note.
+
+    lebanese:
+      hummus:
+        main_label: "Hummus"
+        options:
+          - { value: pita_bread, label: "Pita bread" }
+          - { value: falafel_side, label: "Falafel" }
+          - { value: olives, label: "Olives" }
+          - { value: tabbouleh_side, label: "Tabbouleh" }
+
+      falafel:
+        main_label: "Falafel"
+        options:
+          - { value: pita_bread, label: "Pita bread" }
+          - { value: hummus_side, label: "Hummus" }
+          - { value: tabbouleh_side, label: "Tabbouleh" }
+          - { value: olives, label: "Olives" }
+
+    turkish:
+      kebab:
+        main_label: "Kebab"
+        options:
+          - { value: rice_pilaf, label: "Rice pilaf" }
+          - { value: grilled_vegetables, label: "Grilled vegetables" }
+          - { value: flatbread, label: "Flatbread" }
+          - { value: cacik, label: "Cacik (yogurt & cucumber)" }
+
+  african:
+
+    moroccan:
+      tagine:
+        main_label: "Tagine"
+        options:
+          - { value: couscous_side, label: "Couscous" }
+          - { value: moroccan_bread, label: "Moroccan bread" }
+          - { value: harissa, label: "Harissa" }
+          - { value: olives, label: "Olives" }
+
+      couscous:
+        main_label: "Couscous"
+        options:
+          - { value: tagine_side, label: "Tagine" }
+          - { value: harissa, label: "Harissa" }
+          - { value: moroccan_salad, label: "Moroccan salad" }
+          - { value: olives, label: "Olives" }
+
+      harira:
+        main_label: "Harira"
+        options:
+          - { value: moroccan_bread, label: "Moroccan bread" }
+          - { value: dates, label: "Dates" }
+          - { value: olives, label: "Olives" }
+          - { value: hard_boiled_egg, label: "Hard-boiled egg" }
+
+      pastilla:
+        main_label: "Pastilla"
+        options:
+          - { value: moroccan_salad, label: "Moroccan salad" }
+          - { value: harissa, label: "Harissa" }
+          - { value: olives, label: "Olives" }
+          - { value: orange_slices, label: "Orange slices" }
+
+    ethiopian:
+      doro_wat:
+        main_label: "Doro wat"
+        options:
+          - { value: injera, label: "Injera" }
+          - { value: gomen, label: "Gomen (collard greens)" }
+          - { value: ayib, label: "Ayib (Ethiopian cheese)" }
+          - { value: hard_boiled_egg, label: "Hard-boiled egg" }
+
+      tibs:
+        main_label: "Tibs"
+        options:
+          - { value: injera, label: "Injera" }
+          - { value: gomen, label: "Gomen (collard greens)" }
+          - { value: awaze, label: "Awaze (spicy sauce)" }
+          - { value: onions_and_tomatoes, label: "Onions and tomatoes" }
+
+      kitfo:
+        main_label: "Kitfo"
+        options:
+          - { value: injera, label: "Injera" }
+          - { value: ayib, label: "Ayib (Ethiopian cheese)" }
+          - { value: gomen, label: "Gomen (collard greens)" }
+          - { value: awaze, label: "Awaze (spicy sauce)" }
+
+      shiro:
+        main_label: "Shiro"
+        options:
+          - { value: injera, label: "Injera" }
+          - { value: gomen, label: "Gomen (collard greens)" }
+          - { value: ayib, label: "Ayib (Ethiopian cheese)" }
+          - { value: awaze, label: "Awaze (spicy sauce)" }
+
+    nigerian:
+      jollof_rice:
+        main_label: "Jollof rice"
+        options:
+          - { value: fried_plantain, label: "Fried plantain" }
+          - { value: moi_moi, label: "Moi moi" }
+          - { value: pepper_sauce, label: "Pepper sauce" }
+          - { value: coleslaw, label: "Coleslaw" }
+
+      egusi_soup:
+        main_label: "Egusi soup"
+        options:
+          - { value: fufu, label: "Fufu" }
+          - { value: pounded_yam_side, label: "Pounded yam" }
+          - { value: rice, label: "Rice" }
+          - { value: pepper_sauce, label: "Pepper sauce" }
+
+      suya:
+        main_label: "Suya"
+        options:
+          - { value: onions_and_tomatoes, label: "Onions and tomatoes" }
+          - { value: bread, label: "Bread" }
+          - { value: pepper_sauce, label: "Pepper sauce" }
+          - { value: fried_plantain, label: "Fried plantain" }
+
+      pounded_yam:
+        main_label: "Pounded yam"
+        options:
+          - { value: egusi_soup_side, label: "Egusi soup" }
+          - { value: vegetable_soup, label: "Vegetable soup" }
+          - { value: okra_soup, label: "Okra soup" }
+          - { value: pepper_sauce, label: "Pepper sauce" }
+
+    south_african:
+      bobotie:
+        main_label: "Bobotie"
+        options:
+          - { value: yellow_rice, label: "Yellow rice" }
+          - { value: chutney, label: "Chutney" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: pickled_onions, label: "Pickled onions" }
+
+      biltong:
+        main_label: "Biltong"
+        options:
+          - { value: crackers, label: "Crackers" }
+          - { value: chutney, label: "Chutney" }
+          - { value: pickled_onions, label: "Pickled onions" }
+          - { value: cheese_platter, label: "Cheese platter" }
+
+      boerewors:
+        main_label: "Boerewors"
+        options:
+          - { value: pap, label: "Pap" }
+          - { value: chakalaka, label: "Chakalaka" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: grilled_onions, label: "Grilled onions" }
+
+      bunny_chow:
+        main_label: "Bunny chow"
+        options:
+          - { value: chutney, label: "Chutney" }
+          - { value: achar, label: "Achar" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: pickled_onions, label: "Pickled onions" }
+
+    angolan:
+      muamba_de_galinha:
+        main_label: "Muamba de galinha"
+        options:
+          - { value: funge_side, label: "Funge" }
+          - { value: rice, label: "Rice" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: grilled_vegetables, label: "Grilled vegetables" }
+
+      calulu:
+        main_label: "Calulu"
+        options:
+          - { value: funge_side, label: "Funge" }
+          - { value: rice, label: "Rice" }
+          - { value: side_salad, label: "Side salad" }
+          - { value: fried_plantain, label: "Fried plantain" }
+
+      funge:
+        main_label: "Funge"
+        options:
+          - { value: muamba_de_galinha_side, label: "Muamba de galinha" }
+          - { value: grilled_fish, label: "Grilled fish" }
+          - { value: vegetables, label: "Vegetables" }
+          - { value: palm_oil_sauce, label: "Palm oil sauce" }

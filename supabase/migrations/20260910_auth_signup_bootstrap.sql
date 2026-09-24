@@ -104,6 +104,7 @@ end;
 $$;
 
 -- 4. Backfill for users that signed up before this trigger existed ----------
+-- I did not run this in the migration itself, because I'm working a test env and i don't want all the test users with data that might need to be modifed.
 insert into public.tbl_user_profiles (account_key, display_name, email)
 select u.id,
        nullif(btrim(u.raw_user_meta_data ->> 'display_name'), ''),

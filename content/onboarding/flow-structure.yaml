@@ -1,0 +1,599 @@
+# =============================================================================
+# Onboarding Flow — STRUCTURE ONLY
+# =============================================================================
+# Derived from onboarding_flow-updated.yaml (v4.7). Holds every field that
+# controls BEHAVIOR: node type, writes_to, next/branches, skip_if, repeat_for,
+# options_filter wiring, resolution_order/always_merge/sample_from wiring,
+# infer, other_capture wiring (validation tool/payload/action — not copy).
+#
+# It deliberately does NOT hold any user-facing text or option lists — those
+# live in the DB (`tbl_onboarding_content`), admin-editable at runtime without
+# a deploy. See lib/onboarding/render-node.ts for how the two are merged.
+#
+# --- content lookup convention -----------------------------------------------
+# Unless a node declares its own `options_source`/`resolution_order`/
+# `always_merge` below, its copy (prompt, subtitle, prompt_instructions,
+# skip_label, disclosure_template, options, other_capture.prompt,
+# other_capture.validation.on_invalid.message) is read from the DB row
+# `node:<this node's id>`. biometrics_form/day_meal_picker fields nest their
+# per-field options under that same row at `fields.<field_name>.options`.
+#
+# `options_source: { section: "<section_id>" }` is the lightweight form used
+# when a node's list isn't its own row at all but a SHARED content section —
+# currently only content:days_of_week (n_week_start, n_fixed_meals.day_of_week).
+#
+# --- resolution_order / always_merge ------------------------------------------
+# `type: curated_lookup` now points at a DB section (`section` + `key`/`keys`)
+# instead of a YAML file+table. `type: tool` entries are unchanged wiring —
+# implementations are stubs in this pass (tier 2/3 tools don't exist yet).
+#
+# --- what stays out of this file entirely -------------------------------------
+# validate_other_entry's per-section reasoning, resolve_recipe_uuid/
+# create_recipe_stub/queue_recipe_for_catalog_review/search_recipe_db/
+# generate_pairing_cards/get_sub_cuisines/get_signature_dishes/web_search_*
+# implementations — all backend/tool concerns, not flow structure.
+# =============================================================================
+
+meta:
+  flow_version: "5.0-db-content"
+  target_schema_version: "1.3"
+  entry_node: n_welcome
+  exit_node: n_compile
+  autosave_after_each_node: true
+
+nodes:
+  - id: n_welcome
+    type: system
+    next: n_consent
+
+  - id: n_consent
+    type: consent
+    writes_to: profile.consent          # { accepted: true, accepted_at: <timestamp> }
+    next: n_biometrics
+
+  - id: n_biometrics
+    type: biometrics_form
+    # No longer `optional` — units and gender are now required, so there's no whole-section
+    # Skip (BiometricsForm.tsx gates its skip button on node.optional). The measurements below
+    # stay individually optional, which is what's left of the "share only what you want to"
+    # intent: you must say metric-or-imperial and pick a gender ("Prefer not to say" counts),
+    # but age/height/weight can each be left blank.
+    fields:
+      - name: units
+        type: single_select
+        # required — height/weight are meaningless without knowing cm/kg vs in/lb, and the
+        # ranges below are resolved against whichever is picked
+      - name: gender
+        type: single_select
+        # required — safe to demand because "Prefer not to say" is one of the options, so this
+        # never forces an actual disclosure
+      - name: age
+        type: number
+        optional: true
+        min: 18          # product/ToS floor, not a data-quality one
+        max: 120         # catches typos (a birth year, "999"); a tighter cap would only reject
+                          # real centenarians for no gain
+      - name: height
+        type: number
+        optional: true
+        range_by_unit:
+          metric:   { min: 60, max: 270, label: "cm" }
+          imperial: { min: 24, max: 106, label: "in" }   # ~60cm / ~270cm to the nearest inch
+      - name: weight
+        type: number
+        optional: true
+        range_by_unit:
+          metric:   { min: 25, max: 350, label: "kg" }
+          imperial: { min: 55, max: 772, label: "lb" }   # ~25kg / ~350kg to the nearest pound
+    writes_to:
+      units: profile.locale.units
+      gender: profile.biometrics.gender
+      age: profile.biometrics.age
+      height: profile.biometrics.height
+      weight: profile.biometrics.weight
+    next: n_goal
+
+  - id: n_goal
+    type: single_select
+    optional: true
+    default_if_empty: eat_healthier_balanced
+    branches:
+      - when: "answer == 'manage_a_health_condition'"
+        next: n_health_condition_note
+    lookup:
+      build_muscle_strength:      [protein, carbs, fat]
+      endurance_training_energy:  [carbs, protein, fat]
+      lose_weight_lean_out:       [protein, fat, carbs]
+      eat_healthier_balanced:     [carbs, protein, fat]
+    writes_to: meal_planning_preferences.macro_priority
+    infer:
+      - path: meal_planning_preferences.goals_source
+        value: user_input   # literal — the only source implemented today (see design doc §5)
+    next: n_allergies
+
+  - id: n_health_condition_note
+    type: free_text
+    writes_to: dietary.health_condition_notes   # deliberately NOT dietary.notes (n_intolerances writes that)
+    next: n_allergies
+
+  - id: n_allergies
+    type: multi_select
+    exclusive_value: none   # picking "None of these" clears+disables every other option;
+                              # picking any real allergy clears/disables "None of these" back —
+                              # symmetric, see types.ts
+    require_selection: true   # Continue stays disabled until something's picked — there's
+                                # always a valid choice here (a real allergy, or "None of these"
+                                # itself), so an empty submission is never actually meaningful.
+    writes_to: dietary.allergies
+    other_capture:
+      trigger_value: other
+      appends_to: dietary.allergies
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: allergies
+          context: {}
+        on_invalid:
+          action: confirm_or_correct
+    next: n_allergy_confirm
+
+  - id: n_allergy_confirm
+    type: confirm_edit
+    editable_fields: [dietary.allergies]
+    branches:
+      - when: "answer == 'edit'"
+        next: n_allergies
+    next: n_intolerances
+
+  - id: n_intolerances
+    type: multi_select
+    exclusive_value: none   # "I don't have any" clears+disables every other option (Other
+                              # included); picking any other option clears this one back —
+                              # same symmetric mechanism n_allergies already uses for "None of
+                              # these" (see types.ts). Not `optional` — no separate Skip button;
+                              # "I don't have any" IS the "no intolerances" answer now, so
+                              # require_selection applies the same reasoning n_allergies already
+                              # documents: there's always a valid pick, so submitting nothing is
+                              # never actually meaningful.
+    require_selection: true
+    options_source:
+      always_merge:
+        section: "curated:intolerance.common"
+      # No resolution_order here — this node deliberately shows ONLY the common list
+      # regardless of what was picked on n_allergies. It previously also merged in
+      # curated:intolerance.by_allergen (keyed by the user's allergies, e.g. nuts ->
+      # "Peanut traces"/"Nut oils"), surfacing those as additional tappable options —
+      # removed per product decision: allergen-specific sub-options don't belong mixed
+      # into the intolerances list just because a related allergy was selected.
+    writes_to: dietary.intolerances
+    other_capture:
+      trigger_value: other
+      appends_to: dietary.intolerances
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: intolerances
+          context:
+            allergies: "{dietary.allergies}"
+        on_invalid:
+          action: confirm_or_correct
+    free_text_note_field: dietary.notes
+    next: n_diet_style_cards
+
+  - id: n_diet_style_cards
+    type: multi_select
+    layout: grid   # was swipe_cards; per product decision this now only captures "preferred"
+                    # (tap what applies) — dietary.diet_type.to_avoid is deliberately left
+                    # unwritten by this node. The considered-and-rejected alternative was
+                    # "everything not tapped = to_avoid," which was ruled out: it would turn
+                    # indifference (never having an opinion on Keto) into an explicit avoidance
+                    # claim for every untapped option, which is a materially stronger signal
+                    # than "wasn't my pick" and risks over-filtering downstream if to_avoid is
+                    # ever used to exclude recipes. dietary.diet_type.to_avoid simply stays
+                    # empty (already the correct "no restriction" default) unless something
+                    # else populates it later.
+    exclusive_value: balanced_no_specific_style   # picking this clears+disables every other
+                                                    # option (contradictory otherwise: "no
+                                                    # specific style" + "Vegan" makes no sense);
+                                                    # picking any other option clears this one
+                                                    # back — symmetric, see types.ts
+    optional: true
+    default_if_empty: mediterranean
+    writes_to: dietary.diet_type.preferred
+    other_capture:
+      trigger_value: other
+      appends_to: dietary.diet_type.preferred
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: diet_styles   # plural — the agent's allowlist rejects `diet_style`
+          context: {}            # this section takes no context, per the contract doc §2
+        on_invalid:
+          action: confirm_or_correct
+    next: n_cuisine_broad
+
+  - id: n_cuisine_broad
+    type: multi_select
+    layout: grid   # 2-column tap grid — swipe_cards' left/right gesture was pure overhead here,
+                    # since only the right-swipe ever carried a signal (reaction_map.left was
+                    # "ignore" — no write target at all). Tap-to-select fits an item like cuisine
+                    # (pick as many as apply, no per-item "no" judgment needed) better than a
+                    # binary gesture built for genuinely two-sided decks (diet, pairings, macro
+                    # exclusions all write BOTH directions — this never did).
+    optional: true
+    require_selection: true   # Continue stays disabled until a region is picked. Without it,
+                                # Continue with nothing selected did exactly what Skip does —
+                                # two controls, one behaviour. Skip is the explicit "no
+                                # preference" path; Continue means "here's my answer".
+    # No default_if_empty. Skipping leaves taste_profile.cuisines EMPTY rather than inventing a
+    # preference the user never expressed. The flow outcome is unchanged either way — the old
+    # `mediterranean` default has no curated pairing pool, so the pairing sample came out empty
+    # and that node was bypassed regardless, and repeat_for produced zero sub-cuisine/dish
+    # iterations both ways. What changes is only the recorded value: [] instead of a cuisine
+    # nobody chose. Downstream consumers must treat an empty cuisine list as "no signal" —
+    # the favorite_recipes validator context already documents cuisines as possibly empty.
+    writes_to: taste_profile.cuisines
+    other_capture:
+      trigger_value: other
+      appends_to: taste_profile.cuisines
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: cuisine_broad
+          context: {}
+        on_invalid:
+          action: confirm_or_correct
+    next: n_cuisine_narrow
+
+  - id: n_cuisine_narrow
+    type: multi_select
+    repeat_for: taste_profile.cuisines     # zero iterations if n_cuisine_broad's value came from
+                                             # default_if_empty rather than genuine interaction —
+                                             # see engine's default_applied history flag
+    skip_if: "item == 'other'"
+    item_label:
+      # `{item}` here is a REGION slug (`latin_american`), and its display label lives on the
+      # node that offered it. Without this the prompt reads "within latin_american".
+      from_node_options: n_cuisine_broad
+    options_source:
+      # Reads tbl_cuisines_onboarding, NOT a curated blob in tbl_onboarding_content — the one
+      # break with that convention in the flow, made to widen the choice (296 cuisines vs the
+      # ~7 per region the curated section carried). `{item}` is the flow region value, which
+      # cuisines.ts maps onto the table's own geographic region names. The tier always returns
+      # at least the "Other" tile, so it's terminal — the old tool tiers below it would be dead
+      # code and are gone. See lib/onboarding/cuisines.ts.
+      resolution_order:
+        - type: cuisine_table
+          key: "{item}"
+          limit: 4          # top 4 by region_rank, then "Other"
+    writes_to: taste_profile.sub_cuisines   # holds cuisine_slug values, e.g. `thai_cuisine`
+    other_capture:
+      trigger_value: other
+      appends_to: taste_profile.sub_cuisines
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: cuisine_narrow
+          # The agent's contract for this section is exactly `{ regions: string[] }`, each one
+          # of the six snake_case slugs its own table uses (asia_oceania, central_latin_america,
+          # europe, north_america, middle_east, africa). Its region check is
+          # selectedRegions.includes(hit.region), so with this array absent nothing could ever
+          # match and every in-region cuisine came back flagged as out-of-region.
+          # `parent_cuisine` is deliberately NOT sent — it isn't in the contract.
+          context:
+            regions: "{taste_profile.cuisines}"
+        on_invalid:
+          action: confirm_or_correct
+    next: n_dishes
+
+  - id: n_dishes
+    type: multi_select
+    repeat_for: taste_profile.sub_cuisines
+    skip_if: "item == 'other'"
+    item_label:
+      # `{item}` here is a cuisine_slug (`ghanaian_cuisine`); display_name sits on its own row.
+      # A slug from free text has no row and falls back to the humanised form.
+      from_cuisine_table: true
+    options_source:
+      # Follows n_cuisine_narrow onto tbl_cuisines_onboarding: `{item}` is a cuisine_slug that
+      # node wrote, and each row carries its own popular_dishes. It has to move together with
+      # that node — `curated:cuisine.dishes` is keyed `thai`, not `thai_cuisine`, so leaving
+      # this on the curated lookup would render an empty deck for every cuisine.
+      # Terminal tier, same as there; a custom cuisine from free text has no row and so gets
+      # just the "Other" tile.
+      resolution_order:
+        - type: cuisine_dishes
+          key: "{item}"
+    writes_to: taste_profile.favorite_dishes
+    other_capture:
+      trigger_value: other
+      appends_to: taste_profile.favorite_dishes
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: dishes
+          context:
+            parent_sub_cuisine: "{item}"   # a cuisine_slug, matches tbl_cuisines_onboarding
+            diet_type: "{dietary.diet_type.preferred}"
+            regions: "{taste_profile.cuisines}"   # same region check as cuisine_narrow above
+        on_invalid:
+          action: confirm_or_correct
+    infer:
+      - path: explorer_handoff.preferred_discovery_mode
+        value: "similar_to_favorites"
+    next: n_favorite_recipes
+
+  - id: n_favorite_recipes
+    type: free_text_search
+    optional: true
+    options_source:
+      tool: search_recipe_db
+      args:
+        context: { cuisines: "{taste_profile.cuisines}", dishes: "{taste_profile.favorite_dishes}" }
+    allow_freeform: true
+    validation:
+      tool: validate_other_entry
+      payload:
+        entry: "{answer}"
+        section: favorite_recipes
+        context:
+          cuisines: "{taste_profile.cuisines}"
+          favorite_dishes: "{taste_profile.favorite_dishes}"
+      on_invalid:
+        action: confirm_or_correct
+    max_items: 5
+    writes_to: meal_planning_preferences.preferred_recipes
+    next: n_pairing_cards
+
+  - id: n_pairing_cards
+    type: pairing_cards
+    # Not optional — no whole-sequence Skip (product decision: pairing reactions are data this
+    # product actually needs, not an optional aside). Declining a SPECIFIC dish (no opinion
+    # either way) is still fine via a bare Continue with nothing checked in either question —
+    # only the one-tap "bail on everything remaining" escape hatch was removed. engine.ts's
+    # advanceFlow still supports a whole-node Skip abandoning a repeat_for sequence in general
+    # (bypassRemainingIterations, gated on `optional`), it's just unreachable here now that
+    # PairingCards.tsx renders no Skip button and this node isn't `optional` — left in place as
+    # a general mechanism, not pairing_cards-specific, in case a future optional repeat_for node
+    # wants the same behavior.
+    # Independent of taste_profile.favorite_dishes/meal_planning_preferences.preferred_recipes —
+    # a preference-profiling exercise, not "show cards for dishes you said you like".
+    # taste_profile.cuisines CAN be empty (n_cuisine_broad's default_if_empty was removed so Skip
+    # means "no region", not "mediterranean"): sample_from then draws nothing, repeat_for gets an
+    # empty item list, and resolveEntry falls straight through to `next` — no cards, no skip_if
+    # needed. See pairing_cards_design.md §1.
+    sample_from:
+      source: taste_profile.cuisines
+      pool_section: "curated:pairing.sides"
+      sample_field: meal_planning_preferences.pairing_sample
+      source_snapshot_field: meal_planning_preferences.pairing_sample_source
+      total_sample_size: 6
+      distribution: proportional_round_up   # total / distinct selected cuisines, ROUNDED UP,
+                                              # that many dishes picked at random from EACH
+                                              # cuisine's own curated pool — never borrowed
+                                              # across cuisines. See pairing_cards_design.md §3.2.
+      top_up_tool: generate_pairing_cards   # stub this phase — an under-covered cuisine (or
+                                              # mediterranean, which has no curated pool at all)
+                                              # just contributes fewer dishes than its share.
+    repeat_for: meal_planning_preferences.pairing_sample   # the computed sample — same
+                                                             # repeat_for mechanism as any other
+                                                             # node, just fed by sample_from
+                                                             # instead of a user-populated field
+    writes_to:
+      preferred: meal_planning_preferences.preferred_pairings
+      forbidden: meal_planning_preferences.forbidden_pairings
+    next: n_protein_exclusion_cards
+
+  - id: n_protein_exclusion_cards
+    type: multi_select
+    layout: grid   # was swipe_cards — converted for consistency with the rest of the flow
+                    # (this was the last swipe-gesture UI left). select_all_by_default: "tap
+                    # what you DON'T eat" (opt-out) rather than "tap what you eat" (opt-in) —
+                    # an untouched grid then reads as "I eat everything," not "I eat nothing
+                    # I haven't gotten around to tapping yet." writes_to keeps the same
+                    # {excluded, allowed} shape the old reaction_map used; see engine.ts's
+                    # multi_select-with-object-writes_to branch for how selected/unselected
+                    # map onto it now that there's no swipe side to key off.
+    select_all_by_default: true
+    optional: true
+    options_filter:
+      exclude_source: dietary.diet_type.preferred
+      lookup_section: "curated:diet_macro.exclusions"
+      macro_category: protein
+      disclosure: false   # no "since you're following X, we've ruled out Y" banner — product
+                            # decision: the user already knows what they chose, no need to
+                            # explain the auto-filtering back to them.
+      hard_exclude_sources:   # a reported allergy/intolerance already covers some of these
+        - exclude_source: dietary.allergies
+          lookup_section: "curated:allergy_macro.exclusions"
+        - exclude_source: dietary.intolerances
+          lookup_section: "curated:intolerance_macro.exclusions"
+    default_if_empty:
+      allowed: all_options   # resolves against the FILTERED list — see options-filter.ts
+    writes_to:
+      excluded: dietary.avoided_foods
+      allowed: meal_planning_preferences.variety_rules.protein_variety.rotation
+    other_capture:   # only actually shown when needsAlternative forces it (MultiSelect.tsx) —
+                       # zero SELECTABLE fixed categories left after diet + allergies/intolerances,
+                       # so this is the user's one way to specify what protein DOES work for them,
+                       # instead of silently writing an empty rotation.
+      trigger_value: other
+      appends_to: meal_planning_preferences.variety_rules.protein_variety.rotation
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: accepted_protein   # value stored is what the user ACCEPTS (works for them),
+                                        # not what's excluded — matches memory.other's actual
+                                        # content, not the node's own name
+          context: {}
+        on_invalid:
+          action: confirm_or_correct
+    next: n_carb_exclusion_cards
+
+  - id: n_carb_exclusion_cards
+    type: multi_select
+    layout: grid
+    select_all_by_default: true
+    optional: true
+    options_filter:
+      exclude_source: dietary.diet_type.preferred
+      lookup_section: "curated:diet_macro.exclusions"
+      macro_category: carbs
+      disclosure: false
+      hard_exclude_sources:
+        - exclude_source: dietary.allergies
+          lookup_section: "curated:allergy_macro.exclusions"
+        - exclude_source: dietary.intolerances
+          lookup_section: "curated:intolerance_macro.exclusions"
+    default_if_empty:
+      allowed: all_options
+    writes_to:
+      excluded: dietary.avoided_foods
+      allowed: meal_planning_preferences.variety_rules.carb_variety.rotation
+    other_capture:
+      trigger_value: other
+      appends_to: meal_planning_preferences.variety_rules.carb_variety.rotation
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: accepted_carbs
+          context: {}
+        on_invalid:
+          action: confirm_or_correct
+    next: n_fat_exclusion_cards
+
+  - id: n_fat_exclusion_cards
+    type: multi_select
+    layout: grid
+    select_all_by_default: true
+    optional: true
+    options_filter:
+      exclude_source: dietary.diet_type.preferred
+      lookup_section: "curated:diet_macro.exclusions"
+      macro_category: fat
+      disclosure: false
+      hard_exclude_sources:
+        - exclude_source: dietary.allergies
+          lookup_section: "curated:allergy_macro.exclusions"
+        - exclude_source: dietary.intolerances
+          lookup_section: "curated:intolerance_macro.exclusions"
+    default_if_empty:
+      allowed: all_options
+    writes_to:
+      excluded: dietary.avoided_foods
+      allowed: meal_planning_preferences.variety_rules.fat_variety.rotation
+    other_capture:
+      trigger_value: other
+      appends_to: meal_planning_preferences.variety_rules.fat_variety.rotation
+      validation:
+        tool: validate_other_entry
+        payload:
+          entry: "{answer}"
+          section: accepted_fat
+          context: {}
+        on_invalid:
+          action: confirm_or_correct
+    next: n_active_slots
+
+  - id: n_active_slots
+    type: multi_select
+    select_all_by_default: true   # opt-OUT framing, same as the macro exclusion decks: planning
+                                    # all three main meals is the overwhelmingly common case, so
+                                    # an untouched screen should read as "plan everything", not
+                                    # "plan nothing". Unticking all three is still allowed (snack
+                                    # is force-added regardless via always_include) — that was
+                                    # already reachable before this flag, it's just no longer the
+                                    # accidental default.
+    always_include:
+      - { value: snack, label: "Snacks" }   # forced — see design doc §4d; singular to match the
+                                              # meal_slot enum (slot_kcal_budgets, fixed_meals.meal_slot)
+    writes_to: meal_planning_preferences.active_slots
+    infer:
+      - path: meal_planning_preferences.plan_snacks
+        value: true
+    next: n_week_start   # was n_leftovers — see the disabled block below
+
+  # ---------------------------------------------------------------------
+  # n_leftovers — DISABLED (product decision: one screen too many for the
+  # value it adds right now; may come back later). Unreached rather than
+  # deleted so restoring it is uncommenting this block and pointing
+  # n_active_slots.next back at it.
+  #
+  # While it's off, meal_planning_preferences.variety_rules.leftover_friendly
+  # stays at its skeleton default of null (memory-skeleton.ts) — i.e. "unset",
+  # not false. Anything downstream reading it needs to treat null as "no
+  # preference recorded" rather than "no leftovers".
+  #
+  # Its node:n_leftovers row in tbl_onboarding_content is deliberately left in
+  # place (unused while disabled) so turning it back on needs no content push.
+  # Its node_copy.yaml entry is commented out to match, since validate-flow.mjs
+  # rejects node_copy entries with no corresponding node.
+  #
+  # - id: n_leftovers
+  #   type: single_select
+  #   writes_to: meal_planning_preferences.variety_rules.leftover_friendly   # option values are native booleans
+  #   next: n_week_start
+
+  - id: n_week_start
+    type: day_order_picker
+    options_source: { section: "content:days_of_week" }
+    writes_to: profile.locale.week_start_day
+    next: n_fixed_meals
+
+  - id: n_fixed_meals
+    type: day_meal_picker
+    optional: true
+    repeatable: true
+    fields:
+      - name: day_of_week
+        type: single_select
+        options_source: { section: "content:days_of_week" }
+      - name: meal_slot
+        type: single_select
+        options_source: { from_node_options: n_active_slots }   # {value,label} from that node's own
+                                                                   # content + always_include, filtered to
+                                                                   # whatever ended up in active_slots
+      - name: dish_name
+        type: free_text_search
+        # The dishes the user already named at n_favorite_recipes, offered as pickable
+        # badges so a fixed weekly meal usually costs three taps and no typing. Titles
+        # only — `label_field` names the property to read off each PreferredRecipe, and
+        # the option's value is that same title, because DayMealPicker writes whatever
+        # the composer holds into `fixed_meals[].title` exactly as the free-text box
+        # does. The box stays: this list is a shortcut, not a closed set, and it renders
+        # empty for anyone who skipped n_favorite_recipes.
+        # `tool: search_recipe_db` used to sit here, but that tier is still a stub
+        # returning [] (resolvers.ts) — this is a real source, not a placeholder.
+        options_source:
+          from_memory_list:
+            path: meal_planning_preferences.preferred_recipes
+            label_field: title
+    writes_to: cooking_profile.day_constraints.{day_of_week}.fixed_meals
+    resolve_uuid_via: resolve_recipe_uuid
+    next: n_summary
+
+  - id: n_summary
+    # Not `system`: the body is generated per user by the Onboarding Summary Agent, fetched by
+    # SummaryScreen.tsx from /api/onboarding/summary at render time. Writes nothing, same as a
+    # system node — the recap is read-only, and n_compile behind it is what commits.
+    # The `node:n_summary` content row's `prompt` is not rendered; the returned markdown brings
+    # its own section headings.
+    type: summary
+    next: n_compile
+
+  - id: n_compile
+    type: system
+    tool_calls:
+      - resolve_recipe_uuid
+      - create_recipe_stub
+      - queue_recipe_for_catalog_review
+      - commit_user_memory
+    next: null

@@ -1,0 +1,113 @@
+# =============================================================================
+# Curated intolerance -> macro-category exclusions — SEED SOURCE, not read live.
+# =============================================================================
+# Authoring source for curated:intolerance_macro.exclusions. One entry per
+# distinct n_intolerances value — every curated:intolerance.common value plus
+# every curated:intolerance.by_allergen sub-value (intolerance_curated_data.yaml
+# is the source of truth for that full list; "lactose" and "other" are shared
+# across both and only need one entry here). Same shape and UNION reasoning as
+# allergy_macro_curated_data.yaml — see that file's header.
+#
+# n_intolerances is phrased as "tolerate a little, just not a lot," softer
+# than an allergy's hard block — but these three decks only have two states
+# (eat it / don't), no "moderate amounts" option, so a reported intolerance
+# still resolves to "excluded" here rather than silently doing nothing.
+# =============================================================================
+
+intolerance_macro_exclusions:
+  # --- curated:intolerance.common ---
+  lactose:
+    protein: [dairy_protein]
+    carbs: []
+    fat: []   # NOT butter/ghee. Both are nearly lactose-free — butter is ~80% fat with ~0.1g
+               # lactose per 100g, and ghee has the milk solids removed outright — so most people
+               # who report lactose intolerance eat both without trouble. Excluding them ruled out
+               # two fats a user had said nothing about. `casein` and `whey` below still exclude
+               # them: those are the milk PROTEINS, which butter does carry in trace amounts.
+  gluten_sensitivity:
+    protein: [seitan]   # near-pure wheat gluten
+    carbs: [bread, pasta]
+    fat: []
+  fructose:
+    protein: []
+    carbs: []
+    fat: []
+  histamine:
+    protein: []
+    carbs: []
+    fat: []
+  caffeine:
+    protein: []
+    carbs: []
+    fat: []
+  spicy_food:
+    protein: []
+    carbs: []
+    fat: []
+  none:   # "I don't have any" — exclusive_value on n_intolerances, reports zero intolerances,
+           # nothing hard-excluded
+    protein: []
+    carbs: []
+    fat: []
+  other:
+    protein: []
+    carbs: []
+    fat: []
+
+  # --- curated:intolerance.by_allergen ---
+  tree_nut_cross_reactivity:
+    protein: []
+    carbs: []
+    fat: [nut_seed_fats]
+  peanut_traces:
+    protein: []
+    carbs: []
+    fat: [nut_seed_fats]
+  nut_oils:
+    protein: []
+    carbs: []
+    fat: [nut_seed_fats]
+  wheat_sensitivity:
+    protein: [seitan]   # wheat-specific — seitan is made from wheat gluten
+    carbs: [bread, pasta]
+    fat: []
+  barley:
+    protein: []
+    carbs: [bread, pasta]
+    fat: []
+  rye:
+    protein: []
+    carbs: [bread, pasta]
+    fat: []
+  casein:
+    protein: [dairy_protein]
+    carbs: []
+    fat: [butter, ghee]
+  whey:
+    protein: [dairy_protein]
+    carbs: []
+    fat: [butter, ghee]
+  crustaceans:
+    protein: [shellfish]
+    carbs: []
+    fat: []
+  mollusks:
+    protein: [shellfish]
+    carbs: []
+    fat: []
+  soy_lecithin:
+    protein: [plant_based_tofu]
+    carbs: []
+    fat: []
+  fermented_soy:
+    protein: [plant_based_tofu]
+    carbs: []
+    fat: []
+  egg_white:
+    protein: [eggs]
+    carbs: []
+    fat: []
+  egg_yolk:
+    protein: [eggs]
+    carbs: []
+    fat: []

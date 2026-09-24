@@ -1,0 +1,257 @@
+# =============================================================================
+# Onboarding node COPY — SEED SOURCE, not read live by the app.
+# =============================================================================
+# Authoring source for the `node:<id>` DB sections in tbl_onboarding_content
+# (prompt, subtitle, prompt_instructions, options, skip_label,
+# disclosure_template, other_capture.prompt, other_capture.validation.
+# on_invalid.message) plus the shared `content:days_of_week` section.
+#
+# Every {value,label} option list gets id_order at seed-generation time from
+# its position here (10, 20, 30, ...) — see scripts/onboarding-seed/.
+#
+# This is the layer meant to be edited live via the DB once an admin UI
+# exists; this file is the day-0 seed / the readable record of what that
+# seed contains, not something the running app reads directly.
+# =============================================================================
+
+shared:
+  days_of_week:
+    - { value: sunday, label: "Sunday" }
+    - { value: monday, label: "Monday" }
+    - { value: tuesday, label: "Tuesday" }
+    - { value: wednesday, label: "Wednesday" }
+    - { value: thursday, label: "Thursday" }
+    - { value: friday, label: "Friday" }
+    - { value: saturday, label: "Saturday" }
+
+nodes:
+  n_welcome:
+    prompt: >
+      Welcome message. Explain: "Answer a few quick questions (mostly
+      tap-to-choose) and we'll build your first personalized meal plan —
+      no need to upload any recipes."
+
+  n_consent:
+    prompt: >
+      Short, plain-language disclosure: "We'll use what you share here —
+      including sensitive stuff like allergies and health goals — only to
+      build and adjust your meal plans. You can update or delete this
+      anytime in settings." Single explicit accept action, no dark patterns.
+
+  n_biometrics:
+    prompt: >
+      A few numbers help us size your macros properly — skip the whole
+      thing, or skip individual fields you'd rather not share. (Used only
+      to shape your meal plan, never sold or shared.)
+    fields:
+      units:
+        label: "Units"
+        options:
+          - { value: metric, label: "Metric (cm, kg)" }
+          - { value: imperial, label: "Imperial (in, lb)" }
+      gender:
+        label: "Gender"
+        options:
+          - { value: female, label: "Female" }
+          - { value: male, label: "Male" }
+          - { value: prefer_not_to_say, label: "Prefer not to say" }
+      age:
+        label: "Age"
+      height:
+        label: "Height"
+      weight:
+        label: "Weight"
+
+  n_goal:
+    prompt: "What are you mainly optimizing for right now?"
+    options:
+      - { value: build_muscle_strength, label: "Build muscle / strength" }
+      - { value: endurance_training_energy, label: "Endurance / energy for training" }
+      - { value: lose_weight_lean_out, label: "Lose weight / lean out" }
+      - { value: eat_healthier_balanced, label: "Eat healthier, balanced meals" }
+      - { value: manage_a_health_condition, label: "Manage a health condition" }
+
+  n_health_condition_note:
+    prompt: "Got it — anything specific your doctor/dietitian has you tracking? (optional, just for context)"
+
+  n_diet_style_cards:
+    prompt: "Which eating style best describes you?"
+    prompt_instructions: "Tap all that apply. Tap Skip to bypass — we'll assume Mediterranean."
+    options:
+      - { value: mediterranean, label: "Mediterranean" }
+      - { value: paleo, label: "Paleo" }
+      - { value: vegetarian, label: "Vegetarian" }
+      - { value: vegan, label: "Vegan" }
+      - { value: pescatarian, label: "Pescatarian" }
+      - { value: keto, label: "Keto" }
+      - { value: other, label: "Other" }
+      - { value: balanced_no_specific_style, label: "No specific style" }
+    other_capture:
+      prompt: "Which eating style did we miss?"
+      on_invalid_message: "Just double-checking — is that an eating style, not an allergy or intolerance?"
+
+  n_cuisine_broad:
+    prompt: "Which cuisines do you gravitate toward?"
+    prompt_instructions: "Tap all that apply. Tap Skip to bypass — we'll assume Mediterranean."
+    options:
+      - { value: asian, label: "Asian" }
+      - { value: mediterranean, label: "Mediterranean" }
+      - { value: latin_american, label: "Latin American" }
+      - { value: middle_eastern, label: "Middle Eastern" }
+      - { value: african, label: "African" }
+      - { value: european, label: "European" }
+      - { value: american, label: "American" }
+      - { value: other, label: "Other" }
+    other_capture:
+      prompt: "Which cuisine did we miss?"
+      on_invalid_message: "Just double-checking — is that a cuisine, not a specific dish?"
+
+  n_cuisine_narrow:
+    prompt: "Nice — within {item}, anything specific?"
+    other_capture:
+      prompt: "Which one, specifically?"
+      on_invalid_message: "Just double-checking — is that really within {item}?"
+
+  n_dishes:
+    prompt: "And any dishes from {item} you already love?"
+    other_capture:
+      prompt: "What dish did we miss?"
+      on_invalid_message: "Just double-checking — is that a dish, not a cuisine?"
+
+  n_allergies:
+    prompt: "Any allergies we should treat as hard blocks?"
+    options:
+      - { value: nuts, label: "Nuts" }
+      - { value: gluten, label: "Gluten" }
+      - { value: dairy, label: "Dairy" }
+      - { value: shellfish, label: "Shellfish" }
+      - { value: soy, label: "Soy" }
+      - { value: eggs, label: "Eggs" }
+      - { value: none, label: "None of these" }
+      - { value: other, label: "Other" }
+    other_capture:
+      prompt: "What are you allergic to?"
+      on_invalid_message: "Just double-checking — is that right?"
+
+  n_allergy_confirm:
+    prompt: >
+      Plain-text recap, asked directly rather than inferred — this is the one
+      list a wrong guess actually matters for, and the data is sensitive
+      enough to be worth a second look. e.g. "Just to confirm: nuts (avoid
+      completely). Anything missing or wrong?"
+
+  n_intolerances:
+    prompt: "And anything you can tolerate a little of, just not a lot? (e.g. small amounts of hard cheese)"
+    other_capture:
+      prompt: "What else are you sensitive to?"
+      on_invalid_message: "Just double-checking — is that right?"
+
+  n_favorite_recipes:
+    prompt: "Name a couple of go-to meals you already make or order often."
+    on_invalid_message: "That doesn't look like a dish name — mind double-checking the spelling or rephrasing?"
+
+  n_pairing_cards:
+    prompt: "{dish}"   # this screen's header — interpolated to the sampled dish's own label
+                          # (e.g. "Falafel") at render time, resolved from the curated pool via
+                          # `item` (the bare dish slug) — see engine.ts's renderNode and
+                          # pairing.ts's findPairingDish.
+    preferred_prompt: "Which of these goes well with {dish}?"
+    forbidden_prompt: "Which of these would you never pair with {dish}?"
+
+  n_protein_exclusion_cards:
+    prompt: "Any proteins you'd never eat?"
+    prompt_instructions: "Everything's selected by default. Tap to remove anything you'd never eat."
+    skip_label: "I can eat everything"
+    no_options_message: "None of our usual protein sources fit what you've told us — what works for you?"
+    exclusion_disclaimer: "Greyed-out options don't fit your diet, allergy, or intolerance answers. Tap Back to change those if you'd like to include one."
+    other_capture:
+      prompt: "What protein sources work for you?"
+      on_invalid_message: "Just double-checking — is that a protein source?"
+    options:
+      - { value: poultry, label: "Poultry" }
+      - { value: red_meat, label: "Red meat" }
+      - { value: pork, label: "Pork" }
+      - { value: seafood, label: "Seafood / fish" }
+      - { value: shellfish, label: "Shellfish" }
+      - { value: plant_based_tofu, label: "Plant-based / tofu" }
+      - { value: eggs, label: "Eggs" }
+      - { value: dairy_protein, label: "Dairy-based protein" }
+      - { value: seitan, label: "Seitan" }
+      - { value: lentils_legumes, label: "Lentils / Legumes" }
+
+  n_carb_exclusion_cards:
+    prompt: "Any carb sources you'd never eat?"
+    prompt_instructions: "Everything's selected by default. Tap to remove anything you'd never eat."
+    skip_label: "I can eat everything"
+    no_options_message: "None of our usual carb sources fit what you've told us — what works for you?"
+    exclusion_disclaimer: "Greyed-out options don't fit your diet, allergy, or intolerance answers. Tap Back to change those if you'd like to include one."
+    other_capture:
+      prompt: "What carb sources work for you?"
+      on_invalid_message: "Just double-checking — is that a carb source?"
+    options:
+      - { value: rice, label: "Rice" }
+      - { value: bread, label: "Bread" }
+      - { value: pasta, label: "Pasta" }
+      - { value: potatoes, label: "Potatoes" }
+      - { value: oats, label: "Oats" }
+      - { value: quinoa, label: "Quinoa" }
+      - { value: corn, label: "Corn" }
+      - { value: legumes, label: "Legumes (beans / lentils)" }
+
+  n_fat_exclusion_cards:
+    prompt: "Any fats or oils you'd never use?"
+    prompt_instructions: "Everything's selected by default. Tap to remove anything you'd never use."
+    skip_label: "I can eat everything"
+    no_options_message: "None of our usual fats or oils fit what you've told us — what works for you?"
+    exclusion_disclaimer: "Greyed-out options don't fit your diet, allergy, or intolerance answers. Tap Back to change those if you'd like to include one."
+    other_capture:
+      prompt: "What fats or oils work for you?"
+      on_invalid_message: "Just double-checking — is that a fat or oil?"
+    options:
+      - { value: olive_oil, label: "Olive oil" }
+      - { value: butter, label: "Butter" }
+      - { value: ghee, label: "Ghee" }
+      - { value: lard, label: "Lard" }
+      - { value: tallow, label: "Tallow (beef fat)" }
+      - { value: coconut_oil, label: "Coconut oil" }
+      - { value: seed_oil, label: "Seed / vegetable oil" }
+      - { value: nut_seed_fats, label: "Nuts / seeds / avocado" }
+
+  n_active_slots:
+    prompt: "Which meals do you want us to plan for?"
+    options:
+      - { value: breakfast, label: "Breakfast" }
+      - { value: lunch, label: "Lunch" }
+      - { value: dinner, label: "Dinner" }
+
+  # n_leftovers — DISABLED alongside its flow-structure.yaml node (see the commented block
+  # there). Kept here commented rather than deleted so restoring is symmetric; it must stay
+  # commented while the node is off, since validate-flow.mjs treats a node_copy entry with no
+  # matching node as an error. The live node:n_leftovers DB row is untouched, so re-enabling
+  # needs no content push.
+  #
+  # n_leftovers:
+  #   prompt: "If a recipe makes more servings than one sitting, are you OK eating it again later in the week?"
+  #   options:
+  #     - { value: true, label: "Yes, that's fine" }
+  #     - { value: false, label: "No, I'd rather eat something fresh" }
+
+  n_week_start:
+    prompt: "Last thing for your calendar — which day should your week start on?"
+    prompt_instructions: "Tap a day to make it first on your calendar. Doesn't change how fixed meals below are stored — those stay keyed by plain day name."
+
+  n_fixed_meals:
+    prompt: "Is there any meal that's basically the same every week? (e.g. pizza on Fridays) Skip if not."
+
+  n_summary:
+    prompt: >
+      Render a short human-readable recap of everything captured
+      (styles, cuisines, allergies, pairings, goal → macro priority,
+      excluded proteins, active slots, leftovers, fixed meals).
+      Buttons: "Back" and "Let's start planning".
+
+  n_compile:
+    prompt: >
+      Terminal node. Every prior answer was already autosaved incrementally
+      — this pass is the final, authoritative one: full UUID resolution +
+      schema validation.

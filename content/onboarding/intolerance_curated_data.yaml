@@ -1,0 +1,66 @@
+# =============================================================================
+# Curated intolerance content — SEED SOURCE, not read live by the app.
+# =============================================================================
+# Authoring source for two DB sections: curated:intolerance.common (an
+# unconditional base layer, always merged in — see always_merge in
+# flow-structure.yaml) and curated:intolerance.by_allergen (keyed by the
+# allergen value picked in n_allergies, resolved on top of `common`).
+#
+# `common` exists because an allergen-only-keyed resolution meant someone
+# with NO allergies but genuine lactose intolerance never saw a usable
+# question — n_intolerances no longer has a skip_if at all; `common` is
+# what guarantees the node always has something to show.
+#
+# Values are deliberately reused across `common` and `by_allergen` where the
+# underlying thing is the same (`lactose` here == dairy's `lactose` below)
+# so the merge dedupes naturally rather than showing the same real-world
+# sensitivity twice under different slugs.
+# =============================================================================
+
+common:
+  - { value: lactose, label: "Lactose" }
+  - { value: gluten_sensitivity, label: "Gluten / wheat sensitivity" }
+  - { value: fructose, label: "Fructose" }
+  - { value: histamine, label: "Histamine" }
+  - { value: caffeine, label: "Caffeine" }
+  - { value: spicy_food, label: "Spicy food" }
+  - { value: none, label: "I don't have any" }   # exclusive_value on n_intolerances (see
+                                                    # flow-structure.yaml) — picking this clears+
+                                                    # disables every other option, including
+                                                    # "Other", same mechanism n_allergies already
+                                                    # uses for its own "None of these"
+  - { value: other, label: "Other" }
+
+by_allergen:
+  nuts:
+    - { value: tree_nut_cross_reactivity, label: "Other tree nuts" }
+    - { value: peanut_traces, label: "Peanut traces" }
+    - { value: nut_oils, label: "Nut oils" }
+    - { value: other, label: "Other" }
+
+  gluten:
+    - { value: wheat_sensitivity, label: "Wheat (non-celiac sensitivity)" }
+    - { value: barley, label: "Barley" }
+    - { value: rye, label: "Rye" }
+    - { value: other, label: "Other" }
+
+  dairy:
+    - { value: lactose, label: "Lactose" }
+    - { value: casein, label: "Casein" }
+    - { value: whey, label: "Whey" }
+    - { value: other, label: "Other" }
+
+  shellfish:
+    - { value: crustaceans, label: "Crustaceans (shrimp, crab)" }
+    - { value: mollusks, label: "Mollusks (clams, mussels)" }
+    - { value: other, label: "Other" }
+
+  soy:
+    - { value: soy_lecithin, label: "Soy lecithin" }
+    - { value: fermented_soy, label: "Fermented soy (miso, tempeh)" }
+    - { value: other, label: "Other" }
+
+  eggs:
+    - { value: egg_white, label: "Egg white" }
+    - { value: egg_yolk, label: "Egg yolk" }
+    - { value: other, label: "Other" }
