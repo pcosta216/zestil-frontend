@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { RecipeGrid } from "@/components/RecipeGrid";
 import type { RecipeCollection } from "@/lib/supabase/queries";
-import { BookOpenText, Search } from "@/lib/icons";
+import { BookOpenText, Search, Plus } from "@/lib/icons";
 
 interface Props {
   recipes: RecipeCollection[];
@@ -16,6 +16,8 @@ export function SavedTab({ recipes }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [subTab, setSubTab] = useState<"mine" | "recent">("mine");
+  const [addOpen, setAddOpen] = useState(false);
+  const [addText, setAddText] = useState("");
 
   const collections = useMemo(() => {
     const seen = new Set<string>();
@@ -158,6 +160,60 @@ export function SavedTab({ recipes }: Props) {
             className="absolute inset-x-0 rounded-full bg-green-border transition-[top] duration-75"
             style={{ top: thumb.top, height: thumb.height }}
           />
+        </div>
+      )}
+
+      {/* Floating add button — clears the search bar's height on My recipes, sits lower on
+          Recent since that tab has no search bar. z-10 so the collections-panel backdrop (also
+          z-10, rendered later) paints over it while the panel is open. */}
+      <button
+        onClick={() => setAddOpen(true)}
+        aria-label="Add recipe"
+        className={`absolute right-4 z-10 w-12 h-12 rounded-full bg-green-primary text-white flex items-center justify-center shadow-lg hover:bg-green-primary/90 active:bg-green-primary/80 transition-colors ${
+          subTab === "mine" ? "bottom-20" : "bottom-4"
+        }`}
+      >
+        <Plus size={24} strokeWidth={2} aria-hidden="true" />
+      </button>
+
+      {/* Add-recipe overlay — same fixed/centered-card pattern as the delete confirm dialog in
+          RecipeDetailHero.tsx. Submit isn't wired to anything yet: it just closes and clears. */}
+      {addOpen && (
+        <div className="fixed inset-0 z-50 flex justify-center bg-black/40 p-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="font-display text-base text-text-main">Add a recipe</p>
+              <p className="text-sm text-text-muted">Paste a recipe link or the recipe text.</p>
+            </div>
+            <textarea
+              autoFocus
+              value={addText}
+              onChange={(e) => setAddText(e.target.value)}
+              placeholder="https://… or paste recipe text"
+              className="flex-1 min-h-0 w-full resize-none bg-warm border border-[rgba(0,0,0,0.1)] rounded-xl px-4 py-3 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none focus:border-green-mid transition-colors"
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setAddOpen(false);
+                  setAddText("");
+                }}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[rgba(0,0,0,0.1)] text-sm text-text-main hover:bg-warm transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setAddOpen(false);
+                  setAddText("");
+                }}
+                disabled={!addText.trim()}
+                className="flex-1 px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Add
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
