@@ -9,12 +9,14 @@ import type { DayMealEntry } from "@/lib/onboarding/types";
 // meal_slot comes from n_active_slots' own options + always_include,
 // filtered to whichever slots were actually picked (see resolvers.ts'
 // from_node_options — both resolved server-side into node.fields already).
-export function DayMealPicker({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
+export function DayMealPicker({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
   const [day, setDay] = useState<string | undefined>();
   const [slot, setSlot] = useState<string | undefined>();
   const [dish, setDish] = useState("");
   const [dishPick, setDishPick] = useState<string | undefined>();
-  const [entries, setEntries] = useState<DayMealEntry[]>([]);
+  // Back restores the meals that were added, each still removable — the composer itself starts
+  // empty, since a half-filled one was never part of the answer.
+  const [entries, setEntries] = useState<DayMealEntry[]>(previousAnswer?.day_meal_entries ?? []);
 
   const dayField = node.fields?.find((f) => f.name === "day_of_week");
   const slotField = node.fields?.find((f) => f.name === "meal_slot");

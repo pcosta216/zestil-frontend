@@ -1,15 +1,20 @@
 // The Onboarding Validator Agent (supabase/functions/onboarding-validator-agent, a separate
-// repo) is scoped to exactly these 6 sections — curated data that's inherently non-exhaustive
+// repo) is scoped to exactly the sections below — curated data that's inherently non-exhaustive
 // by design, where the frontend genuinely needs agent reasoning about something outside the
 // curated set. It 400s on anything else, off its OWN hardcoded allowlist — adding a section to
-// tbl_agent_configs is not sufficient to make it callable, so re-probe the live function
-// (scripts/onboarding-seed/probe-diet-style-section.mjs) before adding a name here.
+// tbl_agent_configs is not sufficient to make it callable, so re-probe the live function before
+// adding a name here (probe-diet-style-section.mjs, probe-macro-source-sections.mjs). Both
+// probes have caught a name this flow was about to send and the function would have rejected.
 //
 // `diet_styles` (n_diet_style_cards) joined 2026-09-20; note the plural — the function rejects
-// `diet_style`, which is what this flow used to send. The remaining out-of-scope other_capture
-// nodes (cuisine_broad, accepted_protein, accepted_carbs, accepted_fat) still declare a
-// `validation` block (same YAML shape) but never reach the agent — their options are
-// closed/small-enough sets that they don't need this kind of clarification; see validate-other.ts.
+// `diet_style`, which is what this flow used to send. The three macro-source sections joined
+// 2026-09-25 on the same evidence; theirs is the one `context` carrying display LABELS rather
+// than stored slugs (see validate-other.ts's resolveContext), and the function rejects the
+// `accepted_protein`/`accepted_carbs`/`accepted_fat` names this flow used to send for them.
+//
+// `cuisine_broad` is the one remaining permanently out-of-scope other_capture node: it still
+// declares a `validation` block (same YAML shape) but never reaches the agent, because its
+// options are a closed, small-enough set that doesn't need this kind of clarification.
 //
 // No dependency on server-only code (content.ts/supabase/server) — safe to import from a
 // client component (MultiSelect.tsx/FreeTextSearch.tsx) as well as server code (the API route).
@@ -20,6 +25,9 @@ export const VALIDATOR_SECTIONS = new Set([
   "intolerances",
   "favorite_recipes",
   "diet_styles",
+  "protein_source",
+  "carb_source",
+  "fat_source",
 ]);
 
 export function isValidatorSection(section: string | undefined): boolean {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { loadUserMemory, saveUserMemory } from "@/lib/onboarding/server-memory";
-import { applyAnswer, canGoBack, renderNode } from "@/lib/onboarding/engine";
+import { applyAnswer, canGoBack, recalledAnswer, renderNode } from "@/lib/onboarding/engine";
 import type { Answer } from "@/lib/onboarding/types";
 
 interface AnswerBody {
@@ -32,7 +32,13 @@ export async function POST(req: NextRequest) {
     if (openEntry && (openEntry.node_id !== body.node_id || openEntry.repeat_key !== body.item)) {
       const current = await renderNode(openEntry.node_id, openEntry.repeat_key, memory);
       return NextResponse.json(
-        { error: "Stale node — the flow has moved on", node: current.node, item: current.item, canGoBack: canGoBack(history) },
+        {
+          error: "Stale node — the flow has moved on",
+          node: current.node,
+          item: current.item,
+          canGoBack: canGoBack(history),
+          previousAnswer: recalledAnswer(history, { nodeId: openEntry.node_id, item: openEntry.repeat_key }),
+        },
         { status: 409 }
       );
     }
@@ -43,7 +49,15 @@ export async function POST(req: NextRequest) {
     if ("terminal" in result.next) return NextResponse.json({ done: true });
 
     const rendered = await renderNode(result.next.nodeId, result.next.item, result.memory);
-    return NextResponse.json({ node: rendered.node, item: rendered.item, canGoBack: canGoBack(result.history) });
+    // Normally undefined — a forward move lands on a node being seen for the first time. Set
+    // only when the answer was a confirm_edit "something's wrong", which rewinds INTO an
+    // already-answered node (n_allergy_confirm -> n_allergies) rather than moving forward.
+    return NextResponse.json({
+      node: rendered.node,
+      item: rendered.item,
+      canGoBack: canGoBack(result.history),
+      previousAnswer: recalledAnswer(result.history, result.next),
+    });
   } catch (err) {
     console.error("[onboarding/answer]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to record answer" }, { status: 500 });

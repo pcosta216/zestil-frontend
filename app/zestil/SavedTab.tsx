@@ -15,6 +15,7 @@ export function SavedTab({ recipes }: Props) {
   const [panelOpen, setPanelOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [subTab, setSubTab] = useState<"mine" | "recent">("mine");
 
   const collections = useMemo(() => {
     const seen = new Set<string>();
@@ -24,7 +25,24 @@ export function SavedTab({ recipes }: Props) {
       .sort((a, b) => a.localeCompare(b));
   }, [recipes]);
 
+  // The view carries one row per collection membership, so the same recipe_uuid can repeat with
+  // (potentially) different created_at values across rows — keep the most recent one per recipe.
+  const recentRecipes = useMemo(() => {
+    const byUuid = new Map<string, RecipeCollection>();
+    for (const r of recipes) {
+      const existing = byUuid.get(r.recipe_uuid);
+      if (!existing || (r.created_at ?? "") > (existing.created_at ?? "")) {
+        byUuid.set(r.recipe_uuid, r);
+      }
+    }
+    return [...byUuid.values()]
+      .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
+      .slice(0, 10);
+  }, [recipes]);
+
   const displayed = useMemo(() => {
+    if (subTab === "recent") return recentRecipes;
+
     let filtered = recipes;
     if (selected) filtered = filtered.filter((r) => r.collections_short_desc === selected);
     if (query.trim()) {
@@ -37,7 +55,7 @@ export function SavedTab({ recipes }: Props) {
       seen.add(r.recipe_uuid);
       return true;
     });
-  }, [recipes, selected, query]);
+  }, [recipes, selected, query, subTab, recentRecipes]);
 
   const updateThumb = useCallback(() => {
     const el = scrollRef.current;
@@ -76,21 +94,47 @@ export function SavedTab({ recipes }: Props) {
         className="flex-1 min-h-0 overflow-y-auto no-scrollbar px-4 sm:px-5 py-5 pr-6"
       >
         <div className="flex items-center justify-between mb-4">
-          <h1 className="font-display text-lg text-text-main">My recipes</h1>
-          <button
-            onClick={() => setPanelOpen((o) => !o)}
-            aria-label="Filter by collection"
-            className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
-              panelOpen
-                ? "bg-green-primary text-white"
-                : "bg-green-light text-green-primary hover:bg-green-border"
-            }`}
-          >
-            <BookOpenText size={16} strokeWidth={1.5} aria-hidden="true" />
-          </button>
+          <div className="flex items-center bg-warm rounded-full p-0.5 border border-[rgba(0,0,0,0.07)]">
+            <button
+              onClick={() => setSubTab("mine")}
+              className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                subTab === "mine"
+                  ? "bg-green-primary text-white"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              My recipes
+            </button>
+            <button
+              onClick={() => {
+                setSubTab("recent");
+                setPanelOpen(false);
+              }}
+              className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${
+                subTab === "recent"
+                  ? "bg-green-primary text-white"
+                  : "text-text-muted hover:text-text-main"
+              }`}
+            >
+              Recent
+            </button>
+          </div>
+          {subTab === "mine" && (
+            <button
+              onClick={() => setPanelOpen((o) => !o)}
+              aria-label="Filter by collection"
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
+                panelOpen
+                  ? "bg-green-primary text-white"
+                  : "bg-green-light text-green-primary hover:bg-green-border"
+              }`}
+            >
+              <BookOpenText size={16} strokeWidth={1.5} aria-hidden="true" />
+            </button>
+          )}
         </div>
 
-        {selected && (
+        {subTab === "mine" && selected && (
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[11px] text-green-primary bg-green-light border border-green-border px-2.5 py-0.5 rounded-full">
               {selected}
@@ -118,30 +162,32 @@ export function SavedTab({ recipes }: Props) {
       )}
 
       {/* Search bar */}
-      <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
-        <div className="flex-1 relative">
-          <Search size={14} strokeWidth={1.8} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B4B2A9] pointer-events-none" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search recipes…"
-            className="w-full bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] pl-9 pr-4 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none leading-relaxed focus:border-green-mid transition-colors"
-          />
+      {subTab === "mine" && (
+        <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
+          <div className="flex-1 relative">
+            <Search size={14} strokeWidth={1.8} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B4B2A9] pointer-events-none" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search recipes…"
+              className="w-full bg-warm border border-[rgba(0,0,0,0.1)] rounded-[22px] pl-9 pr-4 py-2 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none leading-relaxed focus:border-green-mid transition-colors"
+            />
+          </div>
+          {query && (
+            <button
+              onClick={() => setQuery("")}
+              className="text-[#B4B2A9] hover:text-text-main transition-colors flex-shrink-0"
+              aria-label="Clear search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
-        {query && (
-          <button
-            onClick={() => setQuery("")}
-            className="text-[#B4B2A9] hover:text-text-main transition-colors flex-shrink-0"
-            aria-label="Clear search"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-        )}
-      </div>
+      )}
 
       {/* Backdrop */}
       {panelOpen && (

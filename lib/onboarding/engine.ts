@@ -585,6 +585,31 @@ export function ensureOpenEntry(nodeId: string, item: string | undefined, memory
 }
 
 /**
+ * Attaches a previously-given answer to the trailing OPEN entry, so the screen about to render
+ * can show what was chosen last time (Back, and confirm_edit's "something's wrong" rewind).
+ *
+ * No-op unless that entry is genuinely the node the answer came from: rewinding to a node that
+ * then auto-skips lands somewhere else entirely, and echoing one node's answer onto another's
+ * screen would pre-select values that were never picked there.
+ */
+function recallAnswerOnOpenEntry(history: FlowPosition, nodeId: string, item: string | undefined, answer: Answer | undefined): void {
+  const last = history[history.length - 1];
+  if (!answer || !last || last.exited_at !== null || last.node_id !== nodeId || last.repeat_key !== item) return;
+  history[history.length - 1] = { ...last, answer };
+}
+
+/**
+ * What the user answered on the node that's open right now, if they arrived back on it rather
+ * than reaching it for the first time. Read by the API routes and handed to the screen so it
+ * can re-render the selections/entries instead of opening blank. Undefined on a first visit,
+ * and after a skip or a default_if_empty write (see HistoryEntry.answer).
+ */
+export function recalledAnswer(history: FlowPosition, target: { nodeId: string; item?: string }): Answer | undefined {
+  const open = history.find((h) => h.exited_at === null && h.node_id === target.nodeId && h.repeat_key === target.item);
+  return open?.answer;
+}
+
+/**
  * Rewinds to `nodeId` as if the user had backed up to it: restores every pre_write_snapshot
  * from the newest entry down to (and including) that node's most recent visit, then drops those
  * entries so re-entering starts clean. Mutates both in place.
@@ -592,7 +617,7 @@ export function ensureOpenEntry(nodeId: string, item: string | undefined, memory
  * Reverting newest -> oldest matters: when two entries wrote the same path, the OLDER snapshot
  * is the state we want to end on, so it has to be applied last.
  */
-function revertAndTruncateFrom(nodeId: string, memory: UserMemory, history: HistoryEntry[]): boolean {
+function revertAndTruncateFrom(nodeId: string, memory: UserMemory, history: HistoryEntry[]): { answer?: Answer } | null {
   let idx = -1;
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].node_id === nodeId) {
@@ -600,7 +625,8 @@ function revertAndTruncateFrom(nodeId: string, memory: UserMemory, history: Hist
       break;
     }
   }
-  if (idx === -1) return false;
+  if (idx === -1) return null;
+  const answer = history[idx].answer; // read before the truncation below drops the entry
 
   for (let i = history.length - 1; i >= idx; i--) {
     const snapshot = history[i].pre_write_snapshot;
@@ -610,7 +636,7 @@ function revertAndTruncateFrom(nodeId: string, memory: UserMemory, history: Hist
     }
   }
   history.length = idx; // the target's own entry goes too — ensureOpenEntry recreates it fresh
-  return true;
+  return { answer };
 }
 
 export async function applyAnswer(params: ApplyAnswerParams): Promise<ApplyAnswerResult> {
@@ -629,9 +655,16 @@ export async function applyAnswer(params: ApplyAnswerParams): Promise<ApplyAnswe
   // what's still recorded. Reuses the same pre_write_snapshot machinery the Back button uses.
   if (structure.type === "confirm_edit" && params.answer.confirm_edit_action === "edit") {
     const targetId = resolveStructuralNext(structure, "edit");
-    if (targetId && revertAndTruncateFrom(targetId, memory, history)) {
+    const rewound = targetId ? revertAndTruncateFrom(targetId, memory, history) : null;
+    if (targetId && rewound) {
       const next = await resolveEntry(targetId, undefined, memory, history);
-      if (!("terminal" in next)) ensureOpenEntry(next.nodeId, next.item, memory, history);
+      // Same recall as Back: "Something's missing or wrong" lands on a screen whose writes have
+      // just been reverted, so without this the user arrives at a blank list with no sign of
+      // what they're correcting — on n_allergies, of all screens.
+      if (!("terminal" in next)) {
+        ensureOpenEntry(next.nodeId, next.item, memory, history);
+        recallAnswerOnOpenEntry(history, targetId, undefined, rewound.answer);
+      }
       return { memory, history, next };
     }
   }
@@ -710,7 +743,16 @@ export async function applyAnswer(params: ApplyAnswerParams): Promise<ApplyAnswe
   // repeat_for handling (wasValueDefaulted) reads it off history to decide whether THIS
   // node's own value should count as a genuine iteration source (see the terminal-not-
   // cascading rule). Setting it any later means that check reads a stale flag.
-  history[entryIndex] = { ...history[entryIndex], exited_at: new Date().toISOString(), default_applied: defaultApplied };
+  // `answer` is set explicitly (not merged) on every path: this entry may be a re-opened one
+  // carrying the answer Back put there, and re-answering has to replace it rather than let a
+  // stale echo of the previous submission survive. Skips and default_if_empty writes record
+  // nothing — see HistoryEntry.answer.
+  history[entryIndex] = {
+    ...history[entryIndex],
+    exited_at: new Date().toISOString(),
+    default_applied: defaultApplied,
+    answer: params.answer.skipped || defaultApplied ? undefined : params.answer,
+  };
 
   const rawAnswerForBranches = params.answer.confirm_edit_action ?? params.answer.values?.[0];
   const next = await advanceFlow(params.nodeId, params.item, rawAnswerForBranches, memory, history, params.answer.skipped === true);
@@ -816,6 +858,15 @@ export function goBack(memory: UserMemory, history: FlowPosition): GoBackResult 
     revert(prev);
     last = prev;
   }
+
+  // Re-open the target's own entry instead of leaving history with nothing open. Two reasons:
+  // it restores the "history always ends with an open entry for what's on screen" invariant the
+  // rest of the engine relies on (the /answer route's stale-node check, resolveResumeTarget),
+  // and it's where the recalled answer lives — so a reload right after Back still shows the
+  // user's choices rather than a blank screen. The snapshot it takes is of the already-reverted
+  // memory, which is exactly what re-answering should overwrite.
+  ensureOpenEntry(last.node_id, last.repeat_key, draft, h);
+  recallAnswerOnOpenEntry(h, last.node_id, last.repeat_key, last.answer);
 
   return { memory: draft, history: h, target: { nodeId: last.node_id, item: last.repeat_key } };
 }

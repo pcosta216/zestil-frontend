@@ -57,6 +57,7 @@ docs/app/
     validator-gate.md        the Onboarding Validator Agent: verdicts, UI contract, failure modes
     options-filter.md        diet intersection vs. allergy/intolerance union; disabled-not-removed
     repeat-for.md            one screen per value: `item`, history entries, the terminal default
+    back-navigation.md       revert-then-recall: what a re-entered screen shows, and why
   onboarding/                in flow order
     n_welcome.md  n_consent.md  n_biometrics.md  n_goal.md  n_health_condition_note.md
     n_allergies.md  n_intolerances.md
@@ -65,6 +66,11 @@ docs/app/
     exclusion-decks.md       n_protein_/n_carb_/n_fat_exclusion_cards — one doc, they differ only by macro
     n_active_slots.md  n_week_start.md  n_fixed_meals.md  n_summary.md  n_compile.md
     bugs_and_improvements.md   known-but-unfixed, and ideas — the one file about what ISN'T true
+  plan_tab.md                the Plan tab (app/zestil/), outside onboarding — one screen, one file
+  saved_tab/                 the Saved tab and the recipe detail route it links to
+    saved_tab.md              list, search, collection filter
+    recipe_detail.md           /zestil/[id] — full recipe view, delete (also reused as an overlay
+                                by plan_tab.md)
 ```
 
 `bugs_and_improvements.md` is the deliberate exception to rule 1's "current state only": it's a
@@ -83,8 +89,9 @@ differences rather than three near-identical files.
 question of its own), and `n_leftovers` is noted inside `n_active_slots.md` as commented out of
 the flow.
 
-The Explore tab and everything outside onboarding are **not** documented yet. Absence of a file
-means "not written", never "nothing special here".
+Outside onboarding, the Plan tab (`plan_tab.md`) and the Saved tab plus its recipe detail route
+(`saved_tab/`) are documented. Explore, Profile and Groceries are **not** documented yet. Absence
+of a file means "not written", never "nothing special here".
 
 Run `node scripts/check-app-docs.mjs` to check these docs mechanically: header blocks, that every
 cited script and source path exists, that links and their anchors resolve, and that no history

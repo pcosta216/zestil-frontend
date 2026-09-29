@@ -7,6 +7,23 @@
 1. n_fixed_meals — a half-filled composer is discarded silently on Continue, no warning
 
 ## Things to improve
+### back button
+*fixed on 24-09-2026*
+* Every screen now re-renders with the answer that was given: selections re-selected, typed
+  "Other" entries listed under the field as removable rows. Covers the Back button and
+  n_allergy_confirm's "Something's missing or wrong" rewind. See `_shared/back-navigation.md`.
+* Still open, and a different thing: items 1 under *Intolerances screen* and *Country / region
+  selection* below ask for feedback at the moment text is typed, not on the way back.
+
+*not a bug, 25-09-2026* — "two dishes typed under Other, only one comes back". The other one
+matched a curated tile after the agent normalised it (`chelo kabab` → `kebab`, which is in the
+Lebanese list), so it came back as a **selected tile** rather than a removable row — the
+post-normalisation dedupe doing its job. Verified against the live agent with a non-matching
+pair: both entries stored, both rows restored. See `_shared/validator-gate.md`.
+
+When the user uses the back button, there is not feedback on the current options choosen, or what "others" were added.
+I'd like that when the user pushes the back button, the onscreen options that have been selected and are stored in memory, show up selected, and if the "other" was used, there should be a list present where the user can remove the items from, if they so whish.
+
 ### Pairings screen
 1. When loading the dishes, match the dishes being offered with the allergies and intolerances selected and ensure to suggest valid options based on those preferences
 ### Intolerances screen

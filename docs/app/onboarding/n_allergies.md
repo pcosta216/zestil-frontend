@@ -3,7 +3,8 @@
 Status: live · Last verified: 2026-09-23
 Component: `app/onboarding/_components/MultiSelect.tsx` · Config: `content/onboarding/flow-structure.yaml`
 Verify: `scripts/onboarding-seed/verify-allergy-edit-loop.mjs` (the confirm-gate edit revert),
-`scripts/onboarding-seed/smoke-test.ts` scenarios I (hard-exclude union) and O (edit rewind)
+`scripts/onboarding-seed/smoke-test.ts` scenarios I (hard-exclude union) and O (edit rewind),
+`scripts/onboarding-seed/verify-back-recalls-answers.mjs` (what a re-entered screen shows)
 
 Multi-select of common allergens, plus free-text "Other". Feeds a confirmation gate
 (`n_allergy_confirm`) and then hard-excludes matching foods from the three exclusion decks
@@ -49,6 +50,11 @@ both.
 
 Going Back from `n_intolerances` skips the gate and lands on `n_allergies` itself — a
 confirmation screen isn't a question you can answer differently.
+
+Either way in, the screen re-renders with the answer still on it: the tapped allergies selected,
+and any typed entry listed under the free-text field as a removable row. The write is reverted
+but the *draft* is not, which is what makes correcting a list possible — see
+[`../_shared/back-navigation.md`](../_shared/back-navigation.md).
 
 ## Depends on
 

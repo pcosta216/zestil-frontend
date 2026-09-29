@@ -62,9 +62,13 @@ function isOurFailure(r: ValidatorEntryResult): boolean {
 // Continue is tapped, not per-Add: the contract is one call per submission. `favorite_recipes`
 // is also the one section where the agent's `value` is ALWAYS null (no slug concept — the
 // target is a recipe title), so only `label` is ever used here.
-export function FreeTextSearch({ node, item, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
+export function FreeTextSearch({ node, item, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
   const [draft, setDraft] = useState("");
-  const [picks, setPicks] = useState<{ label: string }[]>([]);
+  // Back restores the staged chips — already removable, and each re-validates on the next
+  // Continue exactly as it did the first time (they passed once; nothing here assumes they did).
+  const [picks, setPicks] = useState<{ label: string }[]>(() =>
+    (previousAnswer?.recipe_picks ?? []).map((p) => ({ label: p.label }))
+  );
   const [checking, setChecking] = useState(false);
   const [review, setReview] = useState<ReviewState | null>(null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "removed">>({});

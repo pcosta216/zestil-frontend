@@ -10,7 +10,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { __setContentClientForTesting } from "../../lib/onboarding/content";
-import { applyAnswer, entryPoint, goBack, renderNode } from "../../lib/onboarding/engine";
+import { applyAnswer, entryPoint, goBack, recalledAnswer, renderNode } from "../../lib/onboarding/engine";
 import { findPairingDish } from "../../lib/onboarding/pairing";
 import { emptyUserMemory } from "../../lib/onboarding/memory-skeleton";
 import { getPath } from "../../lib/onboarding/paths";
@@ -487,7 +487,10 @@ async function scenarioZeroOptionsRemaining() {
     ["rice", "bread", "pasta", "potatoes", "oats", "quinoa", "corn", "legumes", "lentils_legumes"].sort(),
     "all 8 fixed carb categories avoided (keto's carbs.excluded is the full list) + lentils_legumes on the protein side (keto excludes it there too, for consistency with its own carb restriction)"
   );
-  assertEqual(r.memory.other.accepted_carbs, ["cassava"], "custom entry also staged in memory.other.accepted_carbs");
+  // Staged under the node's agent section slug — `carb_source`, the name the validator agent
+  // dispatches on (MACRO_SOURCES_FRONTEND.md §3), since otherCaptureSection derives both from
+  // the same field.
+  assertEqual(r.memory.other.carb_source, ["cassava"], "custom entry also staged in memory.other.carb_source");
 }
 
 async function scenarioBackAndRevert() {
@@ -773,7 +776,7 @@ async function scenarioValidatedOtherEntries() {
 
   // Legacy path still works untouched — a caller that sends plain other_text (no other_entries)
   // gets the original split-and-append-raw behavior, which is what every out-of-scope section
-  // (diet_style, cuisine_broad, accepted_protein/carbs/fat) still relies on.
+  // (cuisine_broad, and the macro-source sections until the function accepts them) still relies on.
   const legacy = await applyAnswer({
     nodeId: "n_allergies",
     answer: { values: ["other"], other_text: "shellfish, sulphites" },
@@ -818,6 +821,55 @@ async function scenarioConfirmEditRewinds() {
   // Re-answer with something different — the old value must not come back with it.
   r = await applyAnswer({ nodeId: "n_allergies", answer: { values: ["dairy"] }, memory: mem, history: h });
   assertEqual(r.memory.dietary.allergies, ["dairy"], "corrected answer stands alone — no stale 'nuts' appended alongside it");
+}
+
+async function scenarioBackRecallsTheAnswer() {
+  console.log("\n=== Scenario V: Back hands the screen the answer it's about to re-render blank ===");
+
+  // The answer can't be recovered from memory on the way back: goBack reverts this node's
+  // writes before the screen renders, and n_allergies' custom entries land as bare strings in
+  // dietary.allergies with nothing marking which were typed. So the entry records the
+  // submission itself — see HistoryEntry.answer.
+  let mem = emptyUserMemory();
+  let h: FlowPosition = [];
+  const walked = await skipUntil("n_allergies", mem, h);
+  mem = walked.mem;
+  h = walked.h;
+
+  const answer: Answer = { values: ["nuts", "other"], other_entries: [{ entry: "pumpkin", value: null, label: "Pumpkin" }] };
+  let r = await applyAnswer({ nodeId: "n_allergies", answer, memory: mem, history: h });
+  mem = r.memory;
+  h = r.history;
+  assertEqual(mem.dietary.allergies, ["nuts", "pumpkin"], "tapped option and typed entry both written");
+  assert(!("terminal" in r.next) && r.next.nodeId === "n_allergy_confirm", "advanced to the confirm gate");
+
+  const back = goBack(mem, h);
+  assertEqual(back.target.nodeId, "n_allergies", "back lands on n_allergies");
+  assertEqual(back.memory.dietary.allergies, [], "its write is reverted, as always — which is why the answer has to be carried separately");
+
+  const recalled = recalledAnswer(back.history, back.target);
+  assertEqual(recalled?.values, ["nuts", "other"], "the tapped options come back, so the screen re-renders them selected");
+  assertEqual(recalled?.other_entries, [{ entry: "pumpkin", value: null, label: "Pumpkin" }], "so does the typed entry, with the label the agent gave it — that's the removable row");
+
+  // The recall rides on a re-opened entry, not a dangling one: history must still end with an
+  // open entry for what's on screen (the resume invariant, and the /answer route's stale check).
+  const open = back.history.filter((e) => e.exited_at === null);
+  assertEqual(open.length, 1, "exactly one open entry after Back");
+  assertEqual(open[0].node_id, "n_allergies", "and it's the node now on screen");
+
+  // Re-answering replaces the recalled answer rather than merging with it — a removed entry
+  // stays removed. (The write itself is already proven by scenario O; this is about the echo.)
+  r = await applyAnswer({ nodeId: "n_allergies", answer: { values: ["nuts"] }, memory: back.memory, history: back.history });
+  assertEqual(r.memory.dietary.allergies, ["nuts"], "pumpkin is gone from memory");
+  const redone = r.history.find((e) => e.node_id === "n_allergies");
+  assertEqual(redone?.answer?.other_entries, undefined, "and gone from the recalled answer too — no stale echo to re-render");
+
+  // A skip records nothing: echoing an empty answer back would show an opt-out deck with
+  // everything DESELECTED, which is the opposite of what a skip means there.
+  const deck = await skipUntil("n_protein_exclusion_cards", emptyUserMemory(), []);
+  const skipped = await applyAnswer({ nodeId: "n_protein_exclusion_cards", answer: { skipped: true }, memory: deck.mem, history: deck.h });
+  const deckEntry = skipped.history.find((e) => e.node_id === "n_protein_exclusion_cards");
+  assert(deckEntry?.answer === undefined, "a skipped node records no answer — the screen falls back to its own default state");
 }
 
 async function scenarioCustomDietNeutralizesExclusions() {
@@ -1064,6 +1116,7 @@ async function main() {
   await scenarioCuisinesFromTable();
   await scenarioFixedMealsDishOptions();
   await scenarioExclusionAttribution();
+  await scenarioBackRecallsTheAnswer();
   await scenarioBiometricsBounds();
   await scenarioCustomDietNeutralizesExclusions();
 

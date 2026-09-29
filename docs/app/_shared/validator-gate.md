@@ -1,16 +1,16 @@
 # Shared — the validator gate (free-text "Other" entries)
 
-Status: live · Last verified: 2026-09-21
+Status: live · Last verified: 2026-09-25
 Verify: `scripts/onboarding-seed/verify-mixed-entry-review.mjs` (mixed batches, per-entry rows),
 `scripts/onboarding-seed/verify-favrecipes-review.mjs` (section-specific flag semantics),
 `scripts/onboarding-seed/verify-invalid-no-override.mjs` (the `invalid` hard-block, via `n_dishes`)
 
 Any screen that accepts free text runs it past the **Onboarding Validator Agent** before the
-answer is submitted. This is a pre-submit gate in the components, not part of `applyAnswer` —
-the engine stays pure and never calls out.
+answer is submitted — a pre-submit gate in the components, not part of `applyAnswer`, so the
+engine stays pure and never calls out.
 
 Applies to: `n_cuisine_narrow`, `n_dishes`, `n_allergies`, `n_intolerances`,
-`n_favorite_recipes`, `n_diet_style_cards`.
+`n_favorite_recipes`, `n_diet_style_cards`, plus the three macro decks (wired, not yet live).
 
 ## Transport
 
@@ -24,9 +24,7 @@ Authorization: Bearer <the user's session access_token>     (never the service-r
 Clients don't call this directly. They POST to `/api/onboarding/validate-other` with
 `{node_id, item, entries}`; the route resolves the node's `validation.payload.context` against
 server-side memory (a client can't — `n_intolerances` passes `{dietary.allergies}`) and forwards.
-
-One call per **submission**, never per entry. Entries are comma/semicolon/newline-split
-client-side first.
+One call per **submission**, never per entry; entries are comma/semicolon/newline-split first.
 
 ## Sections
 
@@ -43,17 +41,26 @@ callable, and an unknown section 400s. Re-probe the live function before adding 
 | `n_intolerances` | `intolerances` | `{allergies}` |
 | `n_favorite_recipes` | `favorite_recipes` | `{cuisines, favorite_dishes}` |
 | `n_diet_style_cards` | `diet_styles` | `{}` — **plural**; `diet_style` is rejected |
+| `n_protein_exclusion_cards` | `protein_source` | `{carb_sources, fat_sources}` — **labels** |
+| `n_carb_exclusion_cards` | `carb_source` | `{protein_sources, fat_sources}` — **labels** |
+| `n_fat_exclusion_cards` | `fat_source` | `{protein_sources, carb_sources}` — **labels** |
 
 **`regions` is a hard requirement, not extra detail.** The agent's region check is
 `selectedRegions.includes(hit.region)`, reading `context.regions` — an array of the six region
 slugs (`asia_oceania`, `central_latin_america`, `europe`, `north_america`, `middle_east`,
-`africa`), the same vocabulary `n_cuisine_broad` writes into `taste_profile.cuisines`. Omit it
-and the check matches nothing, so every genuinely in-region cuisine comes back `flag`ged as
-out-of-region — a failure that reads like a model problem and isn't one.
+`africa`), the same vocabulary `n_cuisine_broad` writes into `taste_profile.cuisines`. Omit it and
+the check matches nothing, so every in-region cuisine comes back `flag`ged as out-of-region — a
+failure that reads like a model problem and isn't one.
 
-Out of scope (`cuisine_broad`, `accepted_protein`, `accepted_carbs`, `accepted_fat`) declare a
-`validation` block in YAML but never reach the network — `validateEntries` synthesises all-valid
-locally. Their option sets are closed enough not to need it.
+**The three macro-source sections carry only the *other two* macros in `context`**, never their
+own — that's what lets the agent spot a cross-macro duplicate — and they carry display **labels**,
+not the slugs every other section sends. The agent quotes them back verbatim ("You already listed
+Poultry as a Protein Source"), so `red_meat` reaching it surfaces as "Red_meat" in real copy.
+`{ path, labels_from: <node id> }` in the YAML context is what maps one to the other; see
+[`../onboarding/exclusion-decks.md`](../onboarding/exclusion-decks.md).
+
+Out of scope for good: `cuisine_broad` declares a `validation` block but never reaches the
+network — `validateEntries` synthesises all-valid locally. Its option set is closed enough not to.
 
 ## Verdicts
 
@@ -93,6 +100,10 @@ network call happens at all.
 **Post-normalisation dedupe** — if the agent's `value` matches a rendered option's value, select
 that option instead of appending a duplicate custom entry.
 
+> Typing two dishes and getting back one row is this, not a lost entry — the matched one became a
+> lit tile. Matters most on a screen re-entered via [Back](back-navigation.md), where recalled
+> entries are rows and recalled selections are tiles.
+
 > **Known gap.** The agent normalises to its own vocabulary, which does not align with the
 > curated option values: `"keto diet"` → `ketogenic`, but the curated option is `keto`. The
 > dedupe misses, and a custom entry is appended that downstream lookups keyed on `keto` won't
@@ -108,11 +119,8 @@ flagging them as user-typed for that future pass. This runs from the `other_capt
 All of them degrade to `flag` — never to `valid`, which would silently accept unvalidated text,
 and never to `invalid`, which would hard-block on our own fault.
 
-- **Timeout.** `TIMEOUT_MS = 20000` in `lib/onboarding/validate-other.ts`. Sized from measured
-  traffic, not estimated: over 116 logged calls, multi-entry batches ran median 6045ms / p90
-  7429ms / max 8546ms — and those are the function's internal times, excluding transit. The
-  earlier 8000ms guess aborted successful calls routinely. The long wait is an accepted
-  trade-off: this path only runs for freeform text the user opted into typing.
+- **Timeout.** `TIMEOUT_MS = 20000` in `lib/onboarding/validate-other.ts` — sized from measured
+  traffic, not estimated; that constant's own comment carries the numbers and the trade-off.
 - **Short or malformed response.** Results are matched **by entry text**, not by position or a
   length check. Any entry the response doesn't cover becomes a flag. The model returns fewer
   results than entries on roughly 5% of multi-entry calls (observed in `tbl_agent_debug_log`);
@@ -126,8 +134,6 @@ and never to `invalid`, which would hard-block on our own fault.
 
 `tbl_agent_debug_log`, filtered to `agent_name = 'Onboarding Validator Agent'`, has one row per
 request: `user_message` (entries, pipe-separated), `turns[0].raw_text` (the model's **raw**
-output), `final_response` (what the function returned), and `duration_ms`.
-
-Comparing `raw_text` against `final_response` is the fastest way to tell whether the model
-failed to produce something or the function dropped it — it has settled every validator
-question so far.
+output), `final_response` (what the function returned), and `duration_ms`. Comparing `raw_text`
+against `final_response` tells you whether the model failed to produce something or the function
+dropped it — it has settled every validator question so far.

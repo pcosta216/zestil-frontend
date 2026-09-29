@@ -504,6 +504,17 @@ export interface HistoryEntry {
                               // not genuine interaction — see repeat_for's terminal-not-
                               // cascading rule
   pre_write_snapshot?: Record<MemoryPath, unknown>; // for back/truncate-and-revert
+  // What was actually submitted here, kept so Back can re-render the screen with the user's
+  // own choices still on it. It can't be recovered from memory: Back reverts this node's
+  // writes before re-rendering it (that's the whole point of pre_write_snapshot), so by the
+  // time the screen appears the answer is gone from memory_json — and several node types
+  // don't write back anything recognisable as their input anyway (n_goal writes a macro
+  // ORDER looked up from the pick; the exclusion decks write the complement of what was
+  // tapped). Recorded only for a genuine interaction: a skip or a default_if_empty write
+  // leaves it unset, so the screen falls back to its own default state (which for the
+  // exclusion decks is everything selected — not "nothing", which is what echoing an empty
+  // skip answer back would show).
+  answer?: Answer;
   resolved_next?: { nodeId: string; item?: string } | null; // what advanceFlow computed as `next` when this
                                                               // node was exited — null means terminal. Lets
                                                               // resume recover precisely (incl. branch outcomes)

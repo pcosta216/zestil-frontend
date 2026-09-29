@@ -112,9 +112,22 @@ export async function satisfyGate(page) {
 // How to get past each screen that can't simply be skipped. Matched against the heading, in
 // order, before the generic Skip/Continue fallbacks. Keep these keyed on copy that identifies
 // the QUESTION, not on node ids (the DOM has none) and not on position.
+/**
+ * Taps a "none of the above"-style option, unless it's disabled — which it is whenever
+ * something else is already selected (exclusive_value, see MultiSelect.tsx). That state is
+ * reachable on a plain walk now that a re-entered screen comes back with its earlier answer
+ * selected, and clicking a disabled tile just hangs until Playwright times out. An answer is
+ * already on screen in that case, so Continue is the right move.
+ */
+async function tapNoneOr(page, label) {
+  const none = page.getByRole("button", { name: label, exact: true }).first();
+  if ((await none.count()) && (await none.isEnabled())) await tap(page, label);
+  await click(page, /^continue$/i);
+}
+
 const DEFAULT_ANSWERS = [
-  [/allergies we should treat/i, async (page) => { await tap(page, "None of these"); await click(page, /^continue$/i); }],
-  [/tolerate a little of/i, async (page) => { await tap(page, "I don't have any"); await click(page, /^continue$/i); }],
+  [/allergies we should treat/i, async (page) => { await tapNoneOr(page, "None of these"); }],
+  [/tolerate a little of/i, async (page) => { await tapNoneOr(page, "I don't have any"); }],
   [/size your macros/i, async (page) => {
     await tap(page, /metric/i);
     await tap(page, /^(female|male|prefer not to say)$/i);

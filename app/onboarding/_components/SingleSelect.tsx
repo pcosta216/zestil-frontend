@@ -11,8 +11,12 @@ import { OptionButton, PrimaryButton, Prompt, ScreenShell, SkipButton, type Node
 // marks "nothing chosen yet."
 const NONE = Symbol("none");
 
-export function SingleSelect({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
-  const [selected, setSelected] = useState<unknown>(NONE);
+export function SingleSelect({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
+  // Back lands here with the earlier pick already highlighted. Length-checked rather than
+  // `?? NONE` for the same reason NONE exists: a genuine `false` (n_leftovers) is a real answer.
+  const [selected, setSelected] = useState<unknown>(() =>
+    previousAnswer?.values?.length ? previousAnswer.values[0] : NONE
+  );
 
   return (
     <ScreenShell showBack={showBack} onBack={onBack}>

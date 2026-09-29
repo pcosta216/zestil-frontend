@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { loadUserMemory, saveUserMemory } from "@/lib/onboarding/server-memory";
-import { canGoBack, renderNode, resolveResumeTarget } from "@/lib/onboarding/engine";
+import { canGoBack, recalledAnswer, renderNode, resolveResumeTarget } from "@/lib/onboarding/engine";
 
 // GET /api/onboarding/state — the node to render right now. Always goes
 // through resolveResumeTarget: the currently open entry in the normal
@@ -26,7 +26,14 @@ export async function GET() {
     if ("terminal" in target) return NextResponse.json({ done: true });
 
     const rendered = await renderNode(target.nodeId, target.item, memory);
-    return NextResponse.json({ node: rendered.node, item: rendered.item, canGoBack: canGoBack(history) });
+    // Set only when the open entry is one the user backed into — reloading the page right after
+    // Back keeps their choices on screen instead of dropping them. Undefined on a normal resume.
+    return NextResponse.json({
+      node: rendered.node,
+      item: rendered.item,
+      canGoBack: canGoBack(history),
+      previousAnswer: recalledAnswer(history, target),
+    });
   } catch (err) {
     console.error("[onboarding/state]", err);
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to load onboarding state" }, { status: 500 });

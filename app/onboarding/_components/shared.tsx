@@ -8,6 +8,12 @@ export interface NodeScreenProps {
   item?: string;
   showBack: boolean;
   submitting: boolean;
+  // What this person answered here last time, when they arrived by going Back (or via
+  // confirm_edit's "something's wrong" rewind). Screens initialise their state from it so the
+  // answer is visible and editable rather than silently gone — the write itself was reverted
+  // on the way in, so a blank screen would be the only record that anything was ever chosen.
+  // Undefined on a first visit, and after a skip. See HistoryEntry.answer in types.ts.
+  previousAnswer?: Answer;
   onAnswer: (answer: Answer) => void;
   onBack: () => void;
 }

@@ -89,6 +89,19 @@ export async function getDaysOfWeek(): Promise<ContentOption[]> {
   return section.options;
 }
 
+/**
+ * value -> display label for one node's own option list.
+ *
+ * Memory stores slugs (`red_meat`); anything read back out to a person — or to an agent that
+ * will quote it back to one — wants the label the screen actually showed (`Red meat`). Only
+ * covers this node's curated options: a free-text entry was never one, so callers decide their
+ * own fallback for values that miss.
+ */
+export async function nodeOptionLabels(nodeId: string): Promise<Map<unknown, string>> {
+  const options = (await getNodeContent(nodeId)).options ?? [];
+  return new Map(options.map((o) => [o.value, o.label]));
+}
+
 /** Sorts any option array by id_order ascending — every render path should call this before displaying. */
 export function sortByOrder<T extends { id_order: number }>(options: T[]): T[] {
   return [...options].sort((a, b) => a.id_order - b.id_order);

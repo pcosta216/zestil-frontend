@@ -35,7 +35,16 @@ const reverted = await readAllergies();
 console.log("  allergies after 'wrong':", JSON.stringify(reverted));
 check("the earlier write is reverted, not kept", Array.isArray(reverted) && reverted.length === 0, JSON.stringify(reverted));
 
-// Round 2: a different answer must REPLACE the first, not stack on it.
+// The write is reverted, but the screen still SHOWS the answer being corrected — you can't fix
+// a list you can't see. (The two aren't in tension: memory is the record, the screen is the
+// draft, and nothing is written again until Continue.)
+const nutsSelected = await page
+  .getByRole("button", { name: "Nuts", exact: true })
+  .evaluate((el) => el.className.includes("green-light"));
+check("the answer being corrected is still on screen, selected", nutsSelected);
+
+// Round 2: untap the wrong one, tap the right one — a correction must REPLACE, not stack.
+await tap(page, "Nuts");
 await tap(page, "Dairy");
 await click(page, /^continue$/i);
 const after = await readAllergies();

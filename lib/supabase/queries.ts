@@ -50,6 +50,7 @@ export type RecipeCollection = {
   collections_short_desc: string | null;
   recipe_data: RecipeData | null;
   collection_names?: string[];
+  created_at: string | null;
 };
 
 export type Collection = { id: number; name: string };

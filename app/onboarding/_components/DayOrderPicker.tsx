@@ -5,8 +5,8 @@ import { OptionButton, PrimaryButton, Prompt, ScreenShell, type NodeScreenProps 
 
 // n_week_start — tap a day to make it first, highlights the choice, Continue submits —
 // consistent with every other select-type screen in the flow.
-export function DayOrderPicker({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
-  const [selected, setSelected] = useState<string | undefined>(undefined);
+export function DayOrderPicker({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
+  const [selected, setSelected] = useState<string | undefined>(previousAnswer?.day_order_value);
 
   return (
     <ScreenShell showBack={showBack} onBack={onBack}>

@@ -1,4 +1,7 @@
 import { resolveTemplateRef, type ResolveCtx } from "./resolvers";
+import { nodeOptionLabels } from "./content";
+import { humanizeSlug } from "./cuisines";
+import { getPath } from "./paths";
 import { isValidatorSection, TOTAL_FAILURE_REASON } from "./validator-sections";
 
 // Server-only. Batch-validates one whole other_capture submission (or n_favorite_recipes'
@@ -6,10 +9,10 @@ import { isValidatorSection, TOTAL_FAILURE_REASON } from "./validator-sections";
 // Function, supabase/functions/onboarding-validator-agent (not in this repo). One HTTP call
 // per submission, never one per entry — see ONBOARDING_VALIDATOR_AGENT_CONTRACT.md §2.
 //
-// Only the 5 sections in validator-sections.ts are in scope for that agent (it 400s on
-// anything else, confirmed live) — every other other_capture node (diet_style, cuisine_broad,
-// accepted_protein/carbs/fat) never reaches the network here at all; synthesized as all-valid
-// locally, same effect as the old "no validation config" fallback.
+// Only the sections in VALIDATOR_SECTIONS are in scope for that agent (it 400s on anything
+// else, confirmed live) — any other other_capture node (`cuisine_broad` today) never reaches
+// the network here at all; synthesized as all-valid locally, same effect as the old "no
+// validation config" fallback.
 
 const FUNCTION_URL =
   process.env.ONBOARDING_VALIDATOR_FUNCTION_URL ?? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/onboarding-validator-agent`;
@@ -48,17 +51,50 @@ export interface ValidatorEntryResult {
   split_into?: string[] | null;
 }
 
-/** Deep-interpolates a validation.payload.context template: "{item}"/"{dietary.x}" -> resolveTemplateRef. */
-function resolveContext(context: Record<string, unknown> | undefined, ctx: ResolveCtx): Record<string, unknown> {
-  function walk(value: unknown): unknown {
+/**
+ * The slugs at `path`, rendered as the labels `nodeId` shows for them.
+ *
+ * The agent quotes these straight back to the user ("You already listed Poultry as a Protein
+ * Source"), so `red_meat` reaching it verbatim surfaces as "Red_meat" in the copy someone
+ * reads. Values with no curated option are free-text entries the user typed, already stored as
+ * the agent's own normalised slug — humanised, which reproduces that agent's label style
+ * (`black_beans` -> "Black Beans").
+ */
+async function labelsAt(path: string, nodeId: string, ctx: ResolveCtx): Promise<string[]> {
+  const raw = getPath(ctx.memory as unknown as Record<string, unknown>, path);
+  if (!Array.isArray(raw)) return [];
+  const labels = await nodeOptionLabels(nodeId);
+  return raw.map((v) => labels.get(v) ?? (typeof v === "string" ? humanizeSlug(v) : String(v)));
+}
+
+/**
+ * Deep-interpolates a validation.payload.context template. Two forms:
+ *
+ *   "{item}" / "{dietary.allergies}"     the raw value at that path — slugs, as stored
+ *   { path, labels_from: <node id> }     the same array mapped to that node's display labels
+ *
+ * Which one a section wants is the backend's call, not a house style: `cuisine_narrow`'s
+ * `regions` is matched against slug vocabulary inside the agent, while the macro-source
+ * sections' context is read back to the user as prose. Both are load-bearing; neither is
+ * safe to "normalise" to the other.
+ */
+async function resolveContext(context: Record<string, unknown> | undefined, ctx: ResolveCtx): Promise<Record<string, unknown>> {
+  async function walk(value: unknown): Promise<unknown> {
     if (typeof value === "string") return resolveTemplateRef(value, ctx);
-    if (Array.isArray(value)) return value.map(walk);
+    if (Array.isArray(value)) return Promise.all(value.map(walk));
     if (value && typeof value === "object") {
-      return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, walk(v)]));
+      const spec = value as { path?: unknown; labels_from?: unknown };
+      if (typeof spec.path === "string" && typeof spec.labels_from === "string") {
+        return labelsAt(spec.path, spec.labels_from, ctx);
+      }
+      const entries = await Promise.all(
+        Object.entries(value as Record<string, unknown>).map(async ([k, v]) => [k, await walk(v)] as const)
+      );
+      return Object.fromEntries(entries);
     }
     return value;
   }
-  return walk(context ?? {}) as Record<string, unknown>;
+  return (await walk(context ?? {})) as Record<string, unknown>;
 }
 
 // `verdict: "flag"` (never "valid") for every failure/timeout/out-of-session case except the
@@ -98,7 +134,7 @@ export async function validateEntries(
 
   if (!sessionToken) return syntheticResults(entries, "flag"); // shouldn't happen (route already checked auth), but don't silently accept
 
-  const context = resolveContext(validation.payload.context, ctx);
+  const context = await resolveContext(validation.payload.context, ctx);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {

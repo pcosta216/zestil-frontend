@@ -30,9 +30,11 @@ function highlightPhrase(text: string, phrase: string, className: string): React
   );
 }
 
-export function PairingCards({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
-  const [preferred, setPreferred] = useState<Set<unknown>>(new Set());
-  const [forbidden, setForbidden] = useState<Set<unknown>>(new Set());
+export function PairingCards({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
+  // Back re-checks both sides as they were left — these screens repeat per sampled dish, so
+  // without it there's no way to tell which dish's answer you're looking at once you step back.
+  const [preferred, setPreferred] = useState<Set<unknown>>(() => new Set(previousAnswer?.values ?? []));
+  const [forbidden, setForbidden] = useState<Set<unknown>>(() => new Set(previousAnswer?.left_values ?? []));
 
   const toggle = (group: "preferred" | "forbidden", value: unknown) => {
     const [mine, other, setMine, setOther] = group === "preferred" ? [preferred, forbidden, setPreferred, setForbidden] : [forbidden, preferred, setForbidden, setPreferred];

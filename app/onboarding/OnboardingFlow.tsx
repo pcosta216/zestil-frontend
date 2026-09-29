@@ -34,6 +34,7 @@ interface NodeResponse {
   item?: string;
   done?: boolean;
   canGoBack?: boolean;
+  previousAnswer?: Answer; // set when landing on an already-answered node (Back / confirm_edit rewind)
   error?: string;
 }
 
@@ -57,6 +58,7 @@ export function OnboardingFlow() {
   const [node, setNode] = useState<RenderedNode | null>(null);
   const [item, setItem] = useState<string | undefined>(undefined);
   const [canBack, setCanBack] = useState(false);
+  const [previousAnswer, setPreviousAnswer] = useState<Answer | undefined>(undefined);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +97,9 @@ export function OnboardingFlow() {
     setNode(data.node ?? null);
     setItem(data.item);
     setCanBack(Boolean(data.canGoBack));
+    // Always assigned, never merged: a forward move sends no previousAnswer, and leaving the
+    // last one in place would prefill the NEXT screen with the previous screen's answer.
+    setPreviousAnswer(data.previousAnswer);
   }, []);
 
   const loadState = useCallback(async () => {
@@ -246,6 +251,7 @@ export function OnboardingFlow() {
             item={item}
             showBack={canBack}
             submitting={submitting}
+            previousAnswer={previousAnswer}
             onAnswer={handleAnswer}
             onBack={handleBack}
           />

@@ -429,10 +429,21 @@ nodes:
         tool: validate_other_entry
         payload:
           entry: "{answer}"
-          section: accepted_protein   # value stored is what the user ACCEPTS (works for them),
-                                        # not what's excluded — matches memory.other's actual
-                                        # content, not the node's own name
-          context: {}
+          # The agent's own slug for this section (MACRO_SOURCES_FRONTEND.md §3), which also
+          # names the memory.other staging key. Both read correctly: what's stored is what the
+          # user ACCEPTS as a source of this macro, not what they excluded.
+          section: protein_source
+          # The user's already-confirmed picks in the OTHER TWO macros — never this one. Lets
+          # the agent catch a cross-macro duplicate ("you already added this as a carb") and
+          # frame a dual-macro food. Resolved server-side from memory by validate-other.ts, so
+          # these are the rotations as they stand when the screen is answered: empty on a
+          # forward walk (protein runs first), populated if the user backed up into it.
+          # `labels_from` renders each stored slug as the label that node showed for it — the
+          # agent reads these back to the user verbatim ("You already listed Poultry as a
+          # Protein Source"), so `red_meat` would surface as "Red_meat" in real copy.
+          context:
+            carb_sources: { path: meal_planning_preferences.variety_rules.carb_variety.rotation, labels_from: n_carb_exclusion_cards }
+            fat_sources: { path: meal_planning_preferences.variety_rules.fat_variety.rotation, labels_from: n_fat_exclusion_cards }
         on_invalid:
           action: confirm_or_correct
     next: n_carb_exclusion_cards
@@ -464,8 +475,10 @@ nodes:
         tool: validate_other_entry
         payload:
           entry: "{answer}"
-          section: accepted_carbs
-          context: {}
+          section: carb_source   # see n_protein_exclusion_cards for what `context` is doing
+          context:
+            protein_sources: { path: meal_planning_preferences.variety_rules.protein_variety.rotation, labels_from: n_protein_exclusion_cards }
+            fat_sources: { path: meal_planning_preferences.variety_rules.fat_variety.rotation, labels_from: n_fat_exclusion_cards }
         on_invalid:
           action: confirm_or_correct
     next: n_fat_exclusion_cards
@@ -497,8 +510,10 @@ nodes:
         tool: validate_other_entry
         payload:
           entry: "{answer}"
-          section: accepted_fat
-          context: {}
+          section: fat_source   # see n_protein_exclusion_cards for what `context` is doing
+          context:
+            protein_sources: { path: meal_planning_preferences.variety_rules.protein_variety.rotation, labels_from: n_protein_exclusion_cards }
+            carb_sources: { path: meal_planning_preferences.variety_rules.carb_variety.rotation, labels_from: n_carb_exclusion_cards }
         on_invalid:
           action: confirm_or_correct
     next: n_active_slots

@@ -15,8 +15,12 @@ function issueMessage(issue: BiometricsIssue): string {
 // filled in (cm/kg vs in/lb is meaningless otherwise) — enforced client-side
 // here as a submit guard; the engine itself just writes whatever fields
 // arrive, so this is a UX nicety, not a correctness requirement.
-export function BiometricsForm({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
-  const [values, setValues] = useState<Record<string, string>>({});
+export function BiometricsForm({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
+  // Back refills the form with what was entered. Values go back to strings: submit() converts
+  // the numeric fields on the way out, and the inputs are text-valued either way.
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(Object.entries(previousAnswer?.fields ?? {}).map(([k, v]) => [k, String(v)]))
+  );
 
   const [touched, setTouched] = useState(false);
   const setField = (name: string, value: string) => {

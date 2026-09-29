@@ -46,7 +46,9 @@ Each iteration is its own history entry, keyed `{node_id, repeat_key: item}` wit
 `pre_write_snapshot` (`ensureOpenEntry`). Consequences:
 
 - Back pops one iteration at a time and reverts only that iteration's writes; `goBack` returns
-  `{nodeId, item: last.repeat_key}`, so it lands on the specific screen.
+  `{nodeId, item: last.repeat_key}`, so it lands on the specific screen — and re-renders it with
+  that iteration's own answer ([`back-navigation.md`](back-navigation.md)), which is keyed on
+  `repeat_key` too, so one dish's pairings can't surface on another's.
 - Zero iterations leave **no** entry at all — "not in history" and "answered with nothing" are
   distinguishable.
 

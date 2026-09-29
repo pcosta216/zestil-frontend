@@ -5,8 +5,8 @@ import { PrimaryButton, Prompt, ScreenShell, type NodeScreenProps } from "./shar
 
 // n_health_condition_note. A blank submission is fine — the copy itself
 // says "optional, just for context" — the engine only writes non-empty text.
-export function FreeText({ node, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
-  const [text, setText] = useState("");
+export function FreeText({ node, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
+  const [text, setText] = useState(previousAnswer?.text ?? "");
 
   return (
     <ScreenShell showBack={showBack} onBack={onBack}>

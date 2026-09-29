@@ -47,17 +47,35 @@ function splitOtherText(text: string): string[] {
 // `require_selection` opts a node OUT of that default (n_allergies: there's
 // always a valid pick, "None of these" included, so submitting nothing is
 // never actually meaningful).
-export function MultiSelect({ node, item, showBack, submitting, onAnswer, onBack }: NodeScreenProps) {
+export function MultiSelect({ node, item, showBack, submitting, previousAnswer, onAnswer, onBack }: NodeScreenProps) {
   // select_all_by_default (n_protein/carb/fat_exclusion_cards): opt-OUT framing — every
   // SELECTABLE tile starts selected ("I eat this"), tapping one off marks it excluded. A
   // filter-disabled tile (opt.disabled — doesn't fit the user's diet/allergies/intolerances)
   // never starts selected, since it can't be toggled at all. Lazy init so this only runs once
   // per mount; OnboardingFlow's key={node.id+item} already forces a fresh mount (and fresh
   // useState) on every node change, so there's no stale-selection risk switching decks.
-  const [selected, setSelected] = useState<Set<unknown>>(() =>
-    node.select_all_by_default ? new Set((node.options ?? []).filter((o) => !o.disabled).map((o) => o.value)) : new Set()
-  );
+  //
+  // Coming back to an already-answered screen (Back, or confirm_edit's rewind) overrides both
+  // defaults with what was actually submitted — including on an opt-out deck, where the earlier
+  // answer IS the selected set. Recalled values are filtered to options that are still on screen
+  // and still selectable: a value that can't be rendered would sit invisibly in `selected` and
+  // get resubmitted with no way to see or remove it.
+  const [selected, setSelected] = useState<Set<unknown>>(() => {
+    const recalled = previousAnswer?.values;
+    if (recalled) {
+      const selectable = new Set((node.options ?? []).filter((o) => !o.disabled).map((o) => o.value));
+      return new Set(recalled.filter((v) => selectable.has(v)));
+    }
+    return node.select_all_by_default ? new Set((node.options ?? []).filter((o) => !o.disabled).map((o) => o.value)) : new Set();
+  });
   const [otherText, setOtherText] = useState("");
+  // Custom entries from the earlier submission. They're kept as already-resolved entries rather
+  // than dropped back into the text box: the box is the *unvalidated* input, and re-seeding it
+  // would send text through the validator a second time (and re-open a review the user already
+  // settled). Listed below the box, each removable — the whole point of showing them is that a
+  // typed-in allergy is otherwise impossible to take back without restarting the flow.
+  const [keptEntries, setKeptEntries] = useState<OtherEntry[]>(() => previousAnswer?.other_entries ?? []);
+  const removeKeptEntry = (entry: string) => setKeptEntries((e) => e.filter((k) => k.entry !== entry));
   const [checkingOther, setCheckingOther] = useState(false);
   // Held between "validation came back with something to resolve" and the user's decisions, so
   // committing submits the SAME resolved entries that were validated — never a re-derivation.
@@ -152,10 +170,17 @@ export function MultiSelect({ node, item, showBack, submitting, onAnswer, onBack
     Boolean(node.select_all_by_default) &&
     Boolean(node.other_capture) &&
     selectableOptions.every((o) => !selected.has(o.value));
-  const otherActive = Boolean(node.other_capture) && (needsAlternative || selected.has(node.other_capture!.trigger_value));
+  // `keptEntries.length` is the third way in: a recalled answer always re-selects the "Other"
+  // tile with it (the trigger value was part of the submission), but on a needsAlternative deck
+  // there is no such tile, and un-tapping it elsewhere must not hide entries that are still
+  // going to be submitted. Removing them is what gets rid of them.
+  const otherActive =
+    Boolean(node.other_capture) && (needsAlternative || selected.has(node.other_capture!.trigger_value) || keptEntries.length > 0);
   // "Other" selected with no text typed submits nothing for it (see submit()/engine.ts — the
   // placeholder gets filtered out) — doesn't count as a real selection for require_selection.
-  const meaningfulSelectionCount = otherActive && !otherText.trim() ? selected.size - 1 : selected.size;
+  // Entries recalled from the earlier answer are content just as much as freshly typed text.
+  const otherHasContent = Boolean(otherText.trim()) || keptEntries.length > 0;
+  const meaningfulSelectionCount = otherActive && !otherHasContent ? selected.size - 1 : selected.size;
   // While a batch is under review, Continue commits the per-entry decisions rather than
   // re-validating — and stays disabled until every problem entry has one, so an unresolved
   // `invalid` can never be tapped past. Editing the text box exits review entirely (see
@@ -163,13 +188,14 @@ export function MultiSelect({ node, item, showBack, submitting, onAnswer, onBack
   const inReview = review !== null;
   const undecidedCount = review ? review.problems.filter((r) => decisions[r.entry] === undefined).length : 0;
   const survivingCount = review
-    ? review.extraSelections.length +
+    ? keptEntries.length +
+      review.extraSelections.length +
       review.accepted.length +
       review.problems.filter((r) => decisions[r.entry] === "approved").length
     : 0;
   const continueDisabled =
     (node.require_selection === true && meaningfulSelectionCount === 0) ||
-    (needsAlternative && !otherText.trim()) ||
+    (needsAlternative && !otherHasContent) ||
     // Removing every entry on a deck that has nothing else selectable is the same dead end
     // needsAlternative exists to prevent — don't let review be the back door into it.
     (inReview && (undecidedCount > 0 || (needsAlternative && survivingCount === 0)));
@@ -180,11 +206,19 @@ export function MultiSelect({ node, item, showBack, submitting, onAnswer, onBack
   const promptText = needsAlternative && node.no_options_message ? node.no_options_message : node.prompt;
   const hasDisabledOption = (node.options ?? []).some((o) => o.disabled);
 
-  const sendAnswer = (extraSelections: unknown[], otherEntries: OtherEntry[]) =>
+  // Every submission path goes through here, so entries recalled from the earlier answer are
+  // folded in once, in one place, rather than at each of the three call sites. Deduped on the
+  // written form (the agent's normalized `value`, or the raw text when it has none) so retyping
+  // something already listed doesn't submit it twice.
+  const sendAnswer = (extraSelections: unknown[], otherEntries: OtherEntry[]) => {
+    const merged = new Map<string, OtherEntry>();
+    for (const e of [...keptEntries, ...otherEntries]) merged.set(e.value ?? e.entry.trim().toLowerCase(), e);
+    const entries = [...merged.values()];
     onAnswer({
       values: [...new Set([...selected, ...extraSelections])],
-      other_entries: otherEntries.length > 0 ? otherEntries : undefined,
+      other_entries: entries.length > 0 ? entries : undefined,
     });
+  };
 
   // "Other" free text goes through the Onboarding Validator Agent (one batched call for the
   // whole submission — see lib/onboarding/validate-other.ts) BEFORE it's submitted as an
@@ -341,6 +375,28 @@ export function MultiSelect({ node, item, showBack, submitting, onAnswer, onBack
               clearReview(); // editing invalidates the whole reviewed batch and its decisions
             }}
           />
+          {/* What was typed here last time, still on the answer and still removable. Rendered
+              as rows rather than back inside the box: these are settled entries (validated,
+              possibly renamed by the agent), and the box is for new input. */}
+          {keptEntries.length > 0 && (
+            <div className="flex flex-col gap-2 mt-3">
+              {keptEntries.map((e) => (
+                <div
+                  key={e.entry}
+                  className="flex items-center justify-between rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-2.5 text-sm"
+                >
+                  <span className="text-text-main">{e.label ?? e.entry}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeKeptEntry(e.entry)}
+                    className="text-text-muted hover:text-text-main text-xs"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
       {review && (
