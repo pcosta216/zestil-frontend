@@ -39,8 +39,26 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
   const [addOpen, setAddOpen] = useState(false);
   const [addText, setAddText] = useState("");
   const [addSaving, setAddSaving] = useState(false);
+  const [pickCollectionsOpen, setPickCollectionsOpen] = useState(false);
+  const [checkedCollections, setCheckedCollections] = useState<Set<number>>(new Set());
   const [banner, setBanner] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Same filter Explore/Plan apply to their own collections checklist — "main" is where an
+  // unassigned recipe already lives by default, so it isn't offered as a pick here either.
+  const addCollections = useMemo(
+    () => rawCollections.filter((c) => c.name.toLowerCase() !== "main"),
+    [rawCollections]
+  );
+
+  function toggleAddCollection(id: number) {
+    setCheckedCollections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   function showBanner(b: { type: "success" | "info" | "error"; message: string }) {
     if (bannerTimer.current) clearTimeout(bannerTimer.current);
@@ -51,7 +69,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
   useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
 
   async function handleAddRecipe() {
-    if (!addText.trim() || addSaving) return;
+    if (!addText.trim() || addSaving || checkedCollections.size === 0) return;
     setAddSaving(true);
     showBanner({ type: "info", message: "We're cooking the data — we'll let you know when it's ready" });
     try {
@@ -65,20 +83,19 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
       const recipeUuid: string | null = data.recipe_uuid ?? null;
 
       // /recipe/submit alone doesn't attach the recipe to any collection — without this it saves
-      // but never shows up in Saved (same as Explore/Plan when no collection box is checked). Put
-      // it in the account's default "main" collection so it's visible without asking the user to
-      // pick one.
-      const mainId = rawCollections.find((c) => c.name.toLowerCase() === "main")?.id;
-      if (recipeUuid && mainId != null) {
+      // but never shows up in Saved. Same call ExploreTab's own save flow makes once a user has
+      // checked at least one collection box.
+      if (recipeUuid && checkedCollections.size > 0) {
         await fetch("/api/recipe/collections", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ recipe_uuid: recipeUuid, collection_ids: [mainId] }),
+          body: JSON.stringify({ recipe_uuid: recipeUuid, collection_ids: Array.from(checkedCollections) }),
         });
       }
 
       setAddOpen(false);
       setAddText("");
+      setCheckedCollections(new Set());
       showBanner({ type: "success", message: "Recipe added to your collection!" });
       onRecipeSaved?.();
     } catch {
@@ -263,11 +280,12 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
               disabled={addSaving}
               className="flex-1 min-h-0 w-full resize-none bg-warm border border-[rgba(0,0,0,0.1)] rounded-xl px-4 py-3 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none focus:border-green-mid transition-colors disabled:opacity-60"
             />
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
               <button
                 onClick={() => {
                   setAddOpen(false);
                   setAddText("");
+                  setCheckedCollections(new Set());
                 }}
                 disabled={addSaving}
                 className="flex-1 px-4 py-2.5 rounded-xl border border-[rgba(0,0,0,0.1)] text-sm text-text-main hover:bg-warm transition-colors disabled:opacity-50"
@@ -275,13 +293,62 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
                 Cancel
               </button>
               <button
+                onClick={() => setPickCollectionsOpen(true)}
+                disabled={addSaving}
+                aria-label="Choose collections"
+                className={`w-11 h-11 flex-shrink-0 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 ${
+                  checkedCollections.size > 0
+                    ? "bg-green-primary text-white"
+                    : "bg-green-light text-green-primary hover:bg-green-border"
+                }`}
+              >
+                <BookOpenText size={16} strokeWidth={1.5} aria-hidden="true" />
+              </button>
+              <button
                 onClick={handleAddRecipe}
-                disabled={!addText.trim() || addSaving}
+                disabled={!addText.trim() || addSaving || checkedCollections.size === 0}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
                 {addSaving ? "Adding…" : "Add"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Collections picker — opened from within the add-recipe overlay, same fixed/centered-card
+          presentation as that overlay itself, stacked above it (z-[55], still below the banner's
+          z-[60]). Multi-select via checkedCollections, mirroring ExploreTab's own `checked` Set. */}
+      {pickCollectionsOpen && (
+        <div className="fixed inset-0 z-[55] flex justify-center bg-black/40 p-6">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
+            <p className="font-display text-base text-text-main">Choose collections</p>
+            <div className="flex-1 min-h-0 overflow-y-auto no-scrollbar flex flex-col gap-1">
+              {addCollections.length === 0 ? (
+                <p className="text-[12px] text-text-muted px-1 py-2">No collections yet</p>
+              ) : (
+                addCollections.map((c) => (
+                  <label
+                    key={c.id}
+                    className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-warm cursor-pointer transition-colors"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checkedCollections.has(c.id)}
+                      onChange={() => toggleAddCollection(c.id)}
+                      className="accent-green-primary w-3.5 h-3.5"
+                    />
+                    <span className="text-[13px] text-text-main">{c.name}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <button
+              onClick={() => setPickCollectionsOpen(false)}
+              className="px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors"
+            >
+              Done
+            </button>
           </div>
         </div>
       )}
