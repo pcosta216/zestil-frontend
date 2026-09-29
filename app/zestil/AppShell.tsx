@@ -67,7 +67,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
           <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <SavedTab recipes={recipes} />
+          <SavedTab recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} />
         </div>
         <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <ProfileTab profile={profile} fallbackEmail={user.email} />

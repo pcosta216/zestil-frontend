@@ -7,9 +7,29 @@ import { BookOpenText, Search, Plus } from "@/lib/icons";
 
 interface Props {
   recipes: RecipeCollection[];
+  collections?: { id: number; name: string }[];
+  onRecipeSaved?: () => void;
 }
 
-export function SavedTab({ recipes }: Props) {
+// A single line with no whitespace that parses as a URL (or looks like a bare domain, e.g.
+// "example.com/recipe" with no scheme) is treated as a link to scrape; anything else — including
+// a URL with surrounding prose — is sent as raw recipe text.
+function parseRecipeInput(raw: string): { url: string } | { text: string } {
+  const trimmed = raw.trim();
+  if (!/\s/.test(trimmed)) {
+    try {
+      new URL(trimmed);
+      return { url: trimmed };
+    } catch {
+      if (/^[a-z0-9-]+(\.[a-z0-9-]+)+(\/\S*)?$/i.test(trimmed)) {
+        return { url: `https://${trimmed}` };
+      }
+    }
+  }
+  return { text: trimmed };
+}
+
+export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -18,6 +38,55 @@ export function SavedTab({ recipes }: Props) {
   const [subTab, setSubTab] = useState<"mine" | "recent">("mine");
   const [addOpen, setAddOpen] = useState(false);
   const [addText, setAddText] = useState("");
+  const [addSaving, setAddSaving] = useState(false);
+  const [banner, setBanner] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
+  const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showBanner(b: { type: "success" | "info" | "error"; message: string }) {
+    if (bannerTimer.current) clearTimeout(bannerTimer.current);
+    setBanner(b);
+    bannerTimer.current = setTimeout(() => setBanner(null), 5000);
+  }
+
+  useEffect(() => () => { if (bannerTimer.current) clearTimeout(bannerTimer.current); }, []);
+
+  async function handleAddRecipe() {
+    if (!addText.trim() || addSaving) return;
+    setAddSaving(true);
+    showBanner({ type: "info", message: "We're cooking the data — we'll let you know when it's ready" });
+    try {
+      const res = await fetch("/api/recipe/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(parseRecipeInput(addText)),
+      });
+      if (!res.ok) throw new Error("submit failed");
+      const data = await res.json();
+      const recipeUuid: string | null = data.recipe_uuid ?? null;
+
+      // /recipe/submit alone doesn't attach the recipe to any collection — without this it saves
+      // but never shows up in Saved (same as Explore/Plan when no collection box is checked). Put
+      // it in the account's default "main" collection so it's visible without asking the user to
+      // pick one.
+      const mainId = rawCollections.find((c) => c.name.toLowerCase() === "main")?.id;
+      if (recipeUuid && mainId != null) {
+        await fetch("/api/recipe/collections", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ recipe_uuid: recipeUuid, collection_ids: [mainId] }),
+        });
+      }
+
+      setAddOpen(false);
+      setAddText("");
+      showBanner({ type: "success", message: "Recipe added to your collection!" });
+      onRecipeSaved?.();
+    } catch {
+      showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+    } finally {
+      setAddSaving(false);
+    }
+  }
 
   const collections = useMemo(() => {
     const seen = new Set<string>();
@@ -177,7 +246,8 @@ export function SavedTab({ recipes }: Props) {
       </button>
 
       {/* Add-recipe overlay — same fixed/centered-card pattern as the delete confirm dialog in
-          RecipeDetailHero.tsx. Submit isn't wired to anything yet: it just closes and clears. */}
+          RecipeDetailHero.tsx. Stays open (Add disabled, "Adding…") until the submit resolves,
+          same as Explore's own save button doesn't dismiss until its fetch completes. */}
       {addOpen && (
         <div className="fixed inset-0 z-50 flex justify-center bg-black/40 p-6">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-xl flex flex-col gap-4">
@@ -190,7 +260,8 @@ export function SavedTab({ recipes }: Props) {
               value={addText}
               onChange={(e) => setAddText(e.target.value)}
               placeholder="https://… or paste recipe text"
-              className="flex-1 min-h-0 w-full resize-none bg-warm border border-[rgba(0,0,0,0.1)] rounded-xl px-4 py-3 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none focus:border-green-mid transition-colors"
+              disabled={addSaving}
+              className="flex-1 min-h-0 w-full resize-none bg-warm border border-[rgba(0,0,0,0.1)] rounded-xl px-4 py-3 text-[13.5px] text-text-main placeholder:text-[#B4B2A9] outline-none focus:border-green-mid transition-colors disabled:opacity-60"
             />
             <div className="flex gap-3">
               <button
@@ -198,24 +269,30 @@ export function SavedTab({ recipes }: Props) {
                   setAddOpen(false);
                   setAddText("");
                 }}
-                className="flex-1 px-4 py-2.5 rounded-xl border border-[rgba(0,0,0,0.1)] text-sm text-text-main hover:bg-warm transition-colors"
+                disabled={addSaving}
+                className="flex-1 px-4 py-2.5 rounded-xl border border-[rgba(0,0,0,0.1)] text-sm text-text-main hover:bg-warm transition-colors disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  setAddOpen(false);
-                  setAddText("");
-                }}
-                disabled={!addText.trim()}
+                onClick={handleAddRecipe}
+                disabled={!addText.trim() || addSaving}
                 className="flex-1 px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors disabled:opacity-50"
               >
-                Add
+                {addSaving ? "Adding…" : "Add"}
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Banner — slides in from bottom, same pattern as ExploreTab's save-status banner. z-[60]
+          so it stays visible above the add-recipe overlay (z-50) while a submit is in flight. */}
+      <div className={`fixed bottom-4 left-4 right-4 z-[60] transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : banner?.type === "success" ? "bg-green-primary" : "bg-blue-500"}`}>
+          {banner?.message}
+        </div>
+      </div>
 
       {/* Search bar */}
       {subTab === "mine" && (

@@ -68,7 +68,7 @@ docs/app/
     bugs_and_improvements.md   known-but-unfixed, and ideas — the one file about what ISN'T true
   plan_tab.md                the Plan tab (app/zestil/), outside onboarding — one screen, one file
   saved_tab/                 the Saved tab and the recipe detail route it links to
-    saved_tab.md              list, search, collection filter
+    saved_tab.md              My recipes/Recent sub-tabs, search, collection filter, add-recipe
     recipe_detail.md           /zestil/[id] — full recipe view, delete (also reused as an overlay
                                 by plan_tab.md)
 ```
