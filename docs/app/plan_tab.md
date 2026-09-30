@@ -74,18 +74,14 @@ can't drift apart on that mapping (its own header comment says so).
 **Recipe save** (`responseType === "recipe"` messages only, `PlanTab.tsx:800-930`): a heart button
 opens a collections checklist (`collections` come from the page's initial props, filtered to drop
 any collection literally named `"main"`, `PlanTab.tsx:419`). Saving does one of two things
-depending on whether the message already carries a `recipe_uuid`: a known one goes to
-`POST /api/recipe/link`; otherwise `POST /api/recipe/submit` with the raw message text, then,
-if any collections were checked, `POST /api/recipe/collections`. Either way success calls
-`onRecipeSaved?.()`, which `AppShell` wires to a `GET /api/recipes` refetch that updates the Saved
-tab's list (`AppShell.tsx:33-38, 64`).
+depending on whether the message already carries a `recipe_uuid`: a known one goes to the
+Supabase RPC `link_user_recipe` (`PlanTab.tsx:864`, same call ExploreTab.tsx uses); otherwise
+`POST /api/recipe/submit` with the raw message text, then, if any collections were checked,
+`POST /api/recipe/collections`. Either way success calls `onRecipeSaved?.()`, which `AppShell`
+wires to a `GET /api/recipes` refetch that updates the Saved tab's list (`AppShell.tsx:33-38,
+64`).
 
 ## Exceptions & gotchas
-
-**`POST /api/recipe/link` doesn't exist.** `app/api/recipe/` only has `submit/`, `collections/`,
-`[uuid]/` — no `link/`. Every save of a message whose `recipe_uuid` is already known
-(`PlanTab.tsx:864`) 404s; the catch block still shows an error banner, so it fails loud rather
-than silently, but that branch's save is currently always broken.
 
 **The `+ Dinner` / `+ Lunch` / `+ Snack` chips next to the heart button do nothing.**
 `selectedSlots` (`PlanTab.tsx:446, 906-927`) only toggles their own highlight; nothing reads the
@@ -129,5 +125,5 @@ the exception: each patches only the one block its button lived in. See
   `account_key = user.id` (`app/api/plan/entries/[entry_id]/route.ts`)
 - `POST /api/plan` and `POST /api/plan/optimise` write indirectly, inside the Edge Functions they
   proxy to — not visible from this repo
-- `POST /api/recipe/submit`, `POST /api/recipe/collections` — see Exceptions above for
-  `POST /api/recipe/link`
+- `POST /api/recipe/submit`, `POST /api/recipe/collections`
+- Supabase RPC `link_user_recipe` — called directly from the client, not via an API route

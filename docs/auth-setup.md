@@ -3,7 +3,7 @@
 Covers sign-in, sign-up, password recovery and password reset. Code lives in
 `app/(auth)/`, `app/auth/confirm/route.ts`, `app/onboarding/`, and `proxy.ts`.
 
-## 1. Run the migration
+## 1. Run the migrations
 
 `supabase/migrations/20260910_auth_signup_bootstrap.sql` in the SQL editor. It:
 
@@ -15,8 +15,34 @@ Covers sign-in, sign-up, password recovery and password reset. Code lives in
   that already exists
 - backfills rows for auth users that predate the trigger
 
-Re-runnable. It assumes every `account_key` column is uuid, matching
+Then `supabase/migrations/20260930_default_collections_on_profile_insert.sql`,
+which hangs a second trigger off the `tbl_user_profiles` insert the first one
+performs — so signup is a two-link chain, not one trigger:
+
+```
+auth.users insert
+  -> on_auth_user_created                     handle_new_user()          [20260910]
+     -> insert tbl_user_profiles
+        -> trg_user_profiles_insert_collections  fn_insert_default_collections()  [20260930]
+           -> insert tbl_collections_set_header, one row per
+              tbl_collections_header_user_default row (11 today)
+```
+
+That second link is what gives a new account its starter collections (Main,
+Breakfast, Chicken, …). Nothing in the frontend has ever created one — it only
+reads them, via `getCollections` — so without it an account had nowhere to file
+a saved recipe. See [app/saved_tab/saved_tab.md](./app/saved_tab/saved_tab.md).
+
+Both are re-runnable. They assume every `account_key` column is uuid, matching
 `auth.users.id` and `auth.uid()` with no cast on either side.
+
+**`fn_insert_default_collections` is not `security definer`**, unlike
+`handle_new_user`, and `tbl_collections_header_user_default` is not readable by
+`authenticated` (verified: a signed-in user sees 0 of its 11 rows). It works
+only because its one caller today is `handle_new_user`, whose definer rights it
+inherits. A profile row inserted any other way — the `tbl_user_profiles_insert_own`
+policy does permit it — would silently create no collections. The migration's
+own footer has the fix and the rest of the caveats.
 
 `display_name` reaches the trigger through `raw_user_meta_data`, set by
 `signUp({ options: { data: { display_name } } })` in `SignupForm.tsx`.

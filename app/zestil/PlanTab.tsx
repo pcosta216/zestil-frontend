@@ -6,6 +6,7 @@ import remarkBreaks from "remark-breaks";
 import { Heart } from "@/lib/icons";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
+import { createClient } from "@/lib/supabase/browser";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -416,6 +417,7 @@ const WELCOME_MESSAGE: AgentMessage = {
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
 export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
+  const supabase = createClient();
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
   const todayStr    = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
   const stripDays   = useMemo(() => {
@@ -861,12 +863,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                                   const recipeUuid = msg.recipeUuid ?? (msg.responseType === "recipe" ? msg.mealCards?.[0]?.recipe_uuid : null);
                                   let savedUuid: string | null = recipeUuid ?? null;
                                   if (recipeUuid) {
-                                    const res = await fetch("/api/recipe/link", {
-                                      method: "POST",
-                                      headers: { "Content-Type": "application/json" },
-                                      body: JSON.stringify({ recipe_uuid: recipeUuid }),
-                                    });
-                                    if (!res.ok) throw new Error("link failed");
+                                    const { error } = await supabase.rpc("link_user_recipe", { p_recipe_uuid: recipeUuid });
+                                    if (error) throw new Error("link failed");
                                   } else {
                                     const res = await fetch("/api/recipe/submit", {
                                       method: "POST",
