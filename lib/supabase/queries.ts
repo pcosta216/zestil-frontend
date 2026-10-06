@@ -68,6 +68,18 @@ export async function getCollections(userId: string): Promise<Collection[]> {
   return (data ?? []).map((r) => ({ id: r.id as number, name: r.collections_short_desc as string }));
 }
 
+export async function createCollection(userId: string, name: string): Promise<Collection> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("tbl_collections_set_header")
+    .insert({ collections_short_desc: name, account_key: userId })
+    .select("id, collections_short_desc")
+    .single();
+
+  if (error) throw error;
+  return { id: data.id as number, name: data.collections_short_desc as string };
+}
+
 export async function getRecipes(userId: string): Promise<RecipeCollection[]> {
   const supabase = await createClient();
   const { data, error } = await supabase

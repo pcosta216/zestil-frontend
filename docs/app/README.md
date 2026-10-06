@@ -65,6 +65,7 @@ docs/app/
     n_favorite_recipes.md  n_pairing_cards.md
     exclusion-decks.md       n_protein_/n_carb_/n_fat_exclusion_cards — one doc, they differ only by macro
     n_active_slots.md  n_week_start.md  n_fixed_meals.md  n_summary.md  n_compile.md
+    discovery_progress.md      the last screen — not a node; replaces the old "You're all set"
     bugs_and_improvements.md   known-but-unfixed, and ideas — the one file about what ISN'T true
   plan_tab.md                the Plan tab (app/zestil/), outside onboarding — one screen, one file
   saved_tab/                 the Saved tab and the recipe detail route it links to

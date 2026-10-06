@@ -95,6 +95,14 @@ banner the user actually sees on those screens is `exclusion_disclaimer`, render
 from the answers and the option labels, so it requires no authored template and no DB write. The
 split is deliberate — prose frame in content, the facts composed in code.
 
+**Both source paths are read through `asList`, not trusted as arrays.** They are schema lists,
+but a row written before `loadUserMemory` merged onto the skeleton can hold a bare scalar, and
+the two failure modes differ sharply: `.filter` on a string throws and 500s the screen
+(`selectedDiets.filter is not a function`), while `for (const v of "nuts")` does **not** throw —
+it iterates characters, looks up `table["n"]`, `table["u"]`, matches nothing, and silently stops
+applying that allergy. A scalar is wrapped rather than dropped, since it is still a faithful
+reading of what the user picked. Smoke-test scenario W covers both halves.
+
 ## Depends on
 
 - Memory: `dietary.diet_type.preferred`, `dietary.allergies`, `dietary.intolerances`

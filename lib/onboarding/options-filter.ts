@@ -54,13 +54,30 @@ async function labelMap(from: { node: string } | { section: string }): Promise<M
  * intersecting with an empty set (a selected diet with no opinion on this
  * macro) always yields an empty exclusion set, which is intentional.
  */
+/**
+ * Reads a memory path that the schema says is a list, whatever is actually stored there.
+ *
+ * These paths are written by the flow and should always hold arrays — but a row written before
+ * loadUserMemory merged onto the skeleton can hold a bare scalar, and both failure modes here
+ * are bad. `.filter` on a string throws and 500s the whole screen; `for (const v of "nuts")`
+ * does not throw, it iterates CHARACTERS, looks up `table["n"]`, `table["u"]`, matches nothing,
+ * and silently applies no exclusions at all — an allergy quietly stops filtering. Wrapping a
+ * scalar is the faithful reading of what the user picked, and keeps an already-damaged row
+ * working instead of failing on it.
+ */
+function asList(value: unknown): string[] {
+  if (Array.isArray(value)) return value.filter((v): v is string => typeof v === "string");
+  if (typeof value === "string" && value.length > 0) return [value];
+  return [];
+}
+
 export async function applyOptionsFilter(
   filter: OptionsFilterStructure,
   rawOptions: ContentOption[],
   disclosureTemplate: string | undefined,
   memory: UserMemory
 ): Promise<OptionsFilterResult> {
-  const selectedDiets = (getPath(memory as unknown as Record<string, unknown>, filter.exclude_source) as string[] | undefined) ?? [];
+  const selectedDiets = asList(getPath(memory as unknown as Record<string, unknown>, filter.exclude_source));
 
   // Diet table + every hard_exclude_sources table are independent lookups (none depends on
   // another's result) — fetched concurrently rather than one-at-a-time. Sequential awaits here
@@ -70,7 +87,7 @@ export async function applyOptionsFilter(
   const hardSources = (filter.hard_exclude_sources ?? [])
     .map((source) => ({
       source,
-      values: (getPath(memory as unknown as Record<string, unknown>, source.exclude_source) as string[] | undefined) ?? [],
+      values: asList(getPath(memory as unknown as Record<string, unknown>, source.exclude_source)),
     }))
     .filter((s) => s.values.length > 0);
 

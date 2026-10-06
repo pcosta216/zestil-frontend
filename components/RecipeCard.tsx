@@ -6,15 +6,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { ImageOff, CircleEllipsis } from "@/lib/icons";
 import type { RecipeCollection } from "@/lib/supabase/queries";
-
-function isValidUrl(url: string): boolean {
-  try {
-    new URL(url);
-    return true;
-  } catch {
-    return false;
-  }
-}
+import { isValidUrl, formatTime } from "@/lib/recipe-format";
 
 interface Props {
   recipe: RecipeCollection;
@@ -61,12 +53,12 @@ export function RecipeCard({ recipe }: Props) {
             <div className="flex items-center gap-1.5 flex-wrap">
               {recipe.total_time && (
                 <span className="text-[10px] text-green-primary bg-green-light px-2 py-0.5 rounded-full">
-                  {recipe.total_time}
+                  {formatTime(recipe.total_time)}
                 </span>
               )}
               {recipe.prep_time && !recipe.total_time && (
                 <span className="text-[10px] text-green-primary bg-green-light px-2 py-0.5 rounded-full">
-                  {recipe.prep_time} prep
+                  {formatTime(recipe.prep_time)} prep
                 </span>
               )}
               {recipe.servings_value && (

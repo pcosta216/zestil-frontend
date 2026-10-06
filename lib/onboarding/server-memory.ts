@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import { emptyUserMemory } from "./memory-skeleton";
+import { mergeIntoSkeleton } from "./memory-skeleton";
 import type { FlowPosition, UserMemory } from "./types";
 
 // Server-only. Reads/writes tbl_user_memory for the current authenticated
@@ -45,7 +45,11 @@ export async function loadUserMemory(userId: string): Promise<UserMemoryRow> {
 
   if (error) throw new Error(`loadUserMemory: ${error.message}`);
 
-  const memory = data?.memory_json && Object.keys(data.memory_json).length > 0 ? (data.memory_json as UserMemory) : emptyUserMemory();
+  // Always merged onto the skeleton rather than cast to it. A stored row can be partial (an
+  // older schema, a hand-edit, an interrupted write), and a cast would hand the engine a shape
+  // with paths simply missing — which is how a scalar ends up written where a list belongs.
+  // See mergeIntoSkeleton.
+  const memory = mergeIntoSkeleton(data?.memory_json);
   const history = Array.isArray(data?.flow_position) ? (data.flow_position as FlowPosition) : [];
   return { memory, history };
 }

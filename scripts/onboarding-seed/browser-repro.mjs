@@ -96,7 +96,7 @@ async function main() {
   await dumpScreen("Initial state (resume)");
 
   for (let step = 1; step <= 70; step++) {
-    const doneCheck = await page.locator("text=You're all set").count();
+    const doneCheck = await page.locator("text=Finding recipes you'll like").count();
     if (doneCheck) {
       console.log(`[step ${step}] reached the completion screen — stopping`);
       break;

@@ -7,6 +7,7 @@ import { Heart } from "@/lib/icons";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 import { createClient } from "@/lib/supabase/browser";
+import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -416,7 +417,7 @@ const WELCOME_MESSAGE: AgentMessage = {
 
 const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
 
-export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
+export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void; onCollectionCreated?: (c: { id: number; name: string }) => void }) {
   const supabase = createClient();
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
   const todayStr    = useMemo(() => new Date().toLocaleDateString("en-CA"), []);
@@ -851,6 +852,12 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved }: { c
                                 </label>
                               ))
                             )}
+                            <CreateCollectionButton
+                              onCreated={(c) => {
+                                onCollectionCreated?.(c);
+                                setChecked((prev) => new Set(prev).add(c.id));
+                              }}
+                            />
                           </div>
                           <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
                             <button

@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { useRecipeSetup } from "./useRecipeSetup";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
 import { SavedTab } from "./SavedTab";
@@ -28,7 +29,11 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
   }, [router]);
 
   const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
-  const collections = initialCollections;
+  const [collections, setCollections] = useState<Collection[]>(initialCollections);
+
+  const addCollection = useCallback((c: Collection) => {
+    setCollections((prev) => [...prev, c].sort((a, b) => a.name.localeCompare(b.name)));
+  }, []);
 
   const refreshRecipes = useCallback(async () => {
     try {
@@ -37,9 +42,16 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
     } catch { /* silent — stale data is acceptable */ }
   }, []);
 
+  const pickingRecipes = useRecipeSetup(user.id, refreshRecipes);
+
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
       <InstallBanner />
+      {pickingRecipes && (
+        <div role="status" className="px-5 py-2 text-[12px] font-medium text-green-primary bg-green-light border-b border-green-border">
+          Picking recipes for you…
+        </div>
+      )}
       <header className="flex items-center justify-between px-5 py-4 border-b border-[rgba(0,0,0,0.07)] flex-shrink-0">
         <span className="font-display text-[22px] tracking-tight text-text-main">
           Zestil<span className="text-green-primary">.</span>
@@ -61,13 +73,13 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
 
       <div className="flex-1 min-h-0 flex flex-col">
         <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <PlanTab collections={collections} onRecipeSaved={refreshRecipes} />
+          <PlanTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} />
+          <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <SavedTab recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} />
+          <SavedTab recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <ProfileTab profile={profile} fallbackEmail={user.email} />

@@ -792,6 +792,17 @@ export async function applyAnswer(params: ApplyAnswerParams): Promise<ApplyAnswe
 export async function resolveResumeTarget(memory: UserMemory, history: HistoryEntry[]): Promise<FlowTarget> {
   const openEntry = history.find((h) => h.exited_at === null);
   if (openEntry) return { nodeId: openEntry.node_id, item: openEntry.repeat_key };
+
+  // A committed profile with an empty stack is a FINISHED session, not a brand-new one.
+  // commitUserMemory clears flow_position, so without this an already-onboarded user loading
+  // /onboarding is indistinguishable from a first visit: entryPoint would re-open n_welcome
+  // (a plain system node — checkSkip has no "already answered" rule) and the state route would
+  // persist that fresh entry, dropping them at the start of the flow with blank forms and a
+  // profile already written. Reachable for as long as someone sits on the final screen, which
+  // is now minutes of recipe-discovery progress rather than one click. Returning terminal puts
+  // them back on that final screen instead. See smoke-test.ts scenario X.
+  if (memory.profile.onboarding_completed_at) return { terminal: true };
+
   if (history.length === 0) return entryPoint(memory, history);
 
   const last = history[history.length - 1];

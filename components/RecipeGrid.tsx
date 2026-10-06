@@ -1,5 +1,4 @@
 import { RecipeCard } from "./RecipeCard";
-import { RecipeCardEmpty } from "./RecipeCardEmpty";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 
 interface Props {
@@ -24,7 +23,6 @@ export function RecipeGrid({ recipes }: Props) {
       {recipes.map((r) => (
         <RecipeCard key={r.recipe_uuid} recipe={r} />
       ))}
-      <RecipeCardEmpty />
     </div>
   );
 }

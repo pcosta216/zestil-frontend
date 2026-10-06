@@ -4,11 +4,13 @@ import { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { RecipeGrid } from "@/components/RecipeGrid";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 import { BookOpenText, Search, Plus } from "@/lib/icons";
+import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 
 interface Props {
   recipes: RecipeCollection[];
   collections?: { id: number; name: string }[];
   onRecipeSaved?: () => void;
+  onCollectionCreated?: (c: { id: number; name: string }) => void;
 }
 
 // A single line with no whitespace that parses as a URL (or looks like a bare domain, e.g.
@@ -29,7 +31,7 @@ function parseRecipeInput(raw: string): { url: string } | { text: string } {
   return { text: trimmed };
 }
 
-export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved }: Props) {
+export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -342,6 +344,13 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
                   </label>
                 ))
               )}
+              <CreateCollectionButton
+                className="px-3 py-2.5"
+                onCreated={(c) => {
+                  onCollectionCreated?.(c);
+                  setCheckedCollections((prev) => new Set(prev).add(c.id));
+                }}
+              />
             </div>
             <button
               onClick={() => setPickCollectionsOpen(false)}

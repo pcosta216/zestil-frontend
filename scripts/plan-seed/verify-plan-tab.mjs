@@ -48,7 +48,7 @@
 // below follow what was explicitly specified when this script was approved; the CLEANUP path's
 // plan_id lookup is defensive (logs and leaves the row in place rather than guessing wrong) in
 // case that column doesn't exist as named.
-import { openOnboarding, walkTo, headingOf, makeCheck } from "../onboarding-seed/_walk.mjs";
+import { openOnboarding, walkTo, headingOf, makeCheck, BASE } from "../onboarding-seed/_walk.mjs";
 import { createClient } from "@supabase/supabase-js";
 import { config } from "dotenv";
 import { resolve } from "path";
@@ -185,15 +185,18 @@ async function main() {
   const cta = page.getByRole("button", { name: /let's start planning/i });
   await cta.click();
   const finishedOnboarding = await page
-    .getByRole("heading", { name: /you.?re all set/i })
+    .getByRole("heading", { name: /finding recipes you.ll like|your recipes are ready/i })
     .waitFor({ timeout: 25000 })
     .then(() => true)
     .catch(() => false);
   check("onboarding reaches the terminal screen", finishedOnboarding, (await headingOf(page)).slice(0, 60));
 
-  await page.getByRole("button", { name: /go to my plan/i }).click();
+  // That screen gates "Continue to plan" on the backend discovery job finishing, which takes
+  // minutes and isn't what this script is testing — its own exit is covered by
+  // verify-discovery-progress.mjs. The commit has happened, so go straight to the tab.
+  await page.goto(`${BASE}/zestil`);
   await page.waitForURL(/\/zestil/, { timeout: 15000 });
-  check("'Go to my plan' navigates to /zestil", new URL(page.url()).pathname === "/zestil", page.url());
+  check("the app is reachable once onboarding has committed", new URL(page.url()).pathname === "/zestil", page.url());
 
   // ── 2. seed the plan directly (service-role, exact reset-doe.mjs connection pattern) ─────────
   console.log("\n=== seeding tbl_week_plan / tbl_week_plan_entries ===");

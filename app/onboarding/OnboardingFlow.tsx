@@ -16,6 +16,7 @@ import { DayOrderPicker } from "./_components/DayOrderPicker";
 import { DayMealPicker } from "./_components/DayMealPicker";
 import { ConfirmEdit } from "./_components/ConfirmEdit";
 import { SummaryScreen } from "./_components/SummaryScreen";
+import { DiscoveryProgress } from "./_components/DiscoveryProgress";
 
 /** Never rejects — both StrictMode subscribers read the same settled result. */
 async function commitProfile(): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -204,21 +205,12 @@ export function OnboardingFlow() {
     };
   }, [node]);
 
+  // Replaces the old "You're all set" panel. That screen's "Go to my plan" was a trap: recipe
+  // discovery starts around here and runs for minutes, so the button handed the user an empty
+  // plan. DiscoveryProgress holds the same position — after n_compile has committed — and gates
+  // the same navigation on the job actually finishing.
   if (done) {
-    return (
-      <div className="min-h-screen bg-warm flex items-center justify-center px-4 py-10">
-        <div className="w-full max-w-sm text-center">
-          <h1 className="font-display text-3xl text-text-main tracking-tight mb-2">You&apos;re all set</h1>
-          <p className="text-sm text-text-muted mb-10">Your first meal plan is ready.</p>
-          <button
-            onClick={() => router.replace("/zestil")}
-            className="inline-block w-full bg-green-primary text-white rounded-xl py-3 text-sm font-medium hover:bg-green-dark transition-colors"
-          >
-            Go to my plan
-          </button>
-        </div>
-      </div>
-    );
+    return <DiscoveryProgress onContinue={() => router.replace("/zestil")} />;
   }
 
   // n_compile is committed by the effect above, never interacted with. Rendering it through

@@ -10,9 +10,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { readFileSync } from "node:fs";
 import { __setContentClientForTesting } from "../../lib/onboarding/content";
-import { applyAnswer, entryPoint, goBack, recalledAnswer, renderNode } from "../../lib/onboarding/engine";
+import { applyAnswer, entryPoint, goBack, recalledAnswer, renderNode, resolveResumeTarget } from "../../lib/onboarding/engine";
 import { findPairingDish } from "../../lib/onboarding/pairing";
-import { emptyUserMemory } from "../../lib/onboarding/memory-skeleton";
+import { emptyUserMemory, mergeIntoSkeleton } from "../../lib/onboarding/memory-skeleton";
 import { getPath } from "../../lib/onboarding/paths";
 import { DAYS_OF_WEEK, type Answer, type FlowPosition, type UserMemory } from "../../lib/onboarding/types";
 
@@ -872,6 +872,87 @@ async function scenarioBackRecallsTheAnswer() {
   assert(deckEntry?.answer === undefined, "a skipped node records no answer — the screen falls back to its own default state");
 }
 
+async function scenarioPartialMemoryIsRepaired() {
+  console.log("\n=== Scenario W: a partial memory_json must not become scalar writes, then a 500 ===");
+
+  // The exact shape loadUserMemory used to hand the engine for a row that exists but doesn't
+  // cover the whole schema: cast to UserMemory, paths simply absent. writeScalarOrArray then
+  // asks whether the CURRENT value is an array, sees undefined, and overwrites with a bare
+  // scalar instead of appending to a list.
+  const partial = { version: "1.3", profile: { consent: { accepted: true } } } as unknown as UserMemory;
+
+  const raw = await applyAnswer({ nodeId: "n_diet_style_cards", answer: { values: ["vegetarian"] }, memory: partial, history: [] });
+  assertEqual(
+    getPath(raw.memory as unknown as Record<string, unknown>, "dietary.diet_type.preferred"),
+    "vegetarian",
+    "unmerged, the write is still a bare scalar — this is the shape that reached production"
+  );
+
+  // The fix: every load merges onto the skeleton first, so the path exists as [] and appends.
+  const merged = mergeIntoSkeleton({ version: "1.3", profile: { consent: { accepted: true } } });
+  const fixed = await applyAnswer({ nodeId: "n_diet_style_cards", answer: { values: ["vegetarian"] }, memory: merged, history: [] });
+  assertEqual(
+    getPath(fixed.memory as unknown as Record<string, unknown>, "dietary.diet_type.preferred"),
+    ["vegetarian"],
+    "merged first, the same answer appends to a list"
+  );
+  assertEqual(merged.profile.consent.accepted, true, "the stored value still wins over the skeleton's default");
+  assertEqual(merged.dietary.allergies, [], "and every path the row omitted gets its skeleton shape");
+
+  // A row already damaged the old way is repaired on load, not left to throw forever.
+  const repaired = mergeIntoSkeleton({ dietary: { allergies: "nuts", intolerances: "gluten_sensitivity", diet_type: { preferred: "vegetarian" } } });
+  assertEqual(repaired.dietary.allergies, ["nuts"], "a scalar stored where the schema says list is wrapped, not dropped");
+  assertEqual(repaired.dietary.diet_type.preferred, ["vegetarian"], "nested too");
+  assertEqual(mergeIntoSkeleton({ taste_profile: { cuisines: [] } }).taste_profile.cuisines, [], "an explicitly empty stored array wins over the skeleton — not re-defaulted");
+
+  // Rendering is what actually 500'd. Both the throw and its quieter sibling are covered:
+  // `for (const v of "nuts")` iterates characters, so allergy exclusions silently vanished.
+  const protein = await renderNode("n_protein_exclusion_cards", undefined, repaired);
+  const proteinOff = (protein.node.options ?? []).filter((o) => o.disabled).map((o) => o.value);
+  assert(proteinOff.length > 0, `the deck renders instead of throwing: ${JSON.stringify(proteinOff)}`);
+  assert(proteinOff.includes("seitan"), `the gluten intolerance still filters: ${JSON.stringify(proteinOff)}`);
+
+  // The allergy half, on the deck a nuts allergy actually touches: curated:allergy_macro
+  // maps nuts to fat only. Iterating "nuts" as characters would look up n/u/t/s and exclude
+  // nothing here, with no error to notice.
+  const fat = await renderNode("n_fat_exclusion_cards", undefined, repaired);
+  const fatOff = (fat.node.options ?? []).filter((o) => o.disabled).map((o) => o.value);
+  assert(fatOff.includes("nut_seed_fats"), `the nuts allergy is read as a list, not characters: ${JSON.stringify(fatOff)}`);
+}
+
+async function scenarioCommittedUserDoesNotRestart() {
+  console.log("\n=== Scenario X: reloading /onboarding after committing must not restart the flow ===");
+
+  // commitUserMemory clears flow_position, so a committed account and a brand-new one both
+  // arrive at resolveResumeTarget with an empty stack. Telling them apart matters more than it
+  // used to: the final screen is now minutes of recipe-discovery progress rather than one
+  // click, and the copy invites the user to sit there — so a refresh mid-wait is ordinary.
+  const committed = emptyUserMemory();
+  committed.profile.onboarding_completed_at = "2026-10-06";
+
+  const resumed = await resolveResumeTarget(committed, []);
+  assert("terminal" in resumed, `a committed account resumes to terminal, not a node — got ${JSON.stringify(resumed)}`);
+
+  // ...and nothing is written back. The state route saves whatever resolveResumeTarget leaves
+  // in history, so an entry opened here would durably park the user at the start of the flow.
+  const history: FlowPosition = [];
+  await resolveResumeTarget(committed, history);
+  assertEqual(history, [], "no history entry is opened for a finished session");
+
+  // The fresh-account path is untouched: no completion stamp means a real first visit.
+  const fresh: FlowPosition = [];
+  const first = await resolveResumeTarget(emptyUserMemory(), fresh);
+  assert(!("terminal" in first) && first.nodeId === "n_welcome", `a new account still starts at n_welcome — got ${JSON.stringify(first)}`);
+  assert(fresh.length === 1 && fresh[0].exited_at === null, "and gets its open entry as before");
+
+  // An interrupted session still resumes where it was, completion stamp or not — the open
+  // entry wins, so this check can never swallow a genuine mid-flow resume.
+  const midFlow = emptyUserMemory();
+  const walked = await skipUntil("n_allergies", midFlow, []);
+  const openEntryTarget = await resolveResumeTarget(walked.mem, walked.h);
+  assert(!("terminal" in openEntryTarget) && openEntryTarget.nodeId === "n_allergies", "an open entry still wins");
+}
+
 async function scenarioCustomDietNeutralizesExclusions() {
   console.log("\n=== Scenario Q: a custom diet slug in diet_type.preferred wipes out every other diet's exclusions ===");
 
@@ -1117,6 +1198,8 @@ async function main() {
   await scenarioFixedMealsDishOptions();
   await scenarioExclusionAttribution();
   await scenarioBackRecallsTheAnswer();
+  await scenarioPartialMemoryIsRepaired();
+  await scenarioCommittedUserDoesNotRestart();
   await scenarioBiometricsBounds();
   await scenarioCustomDietNeutralizesExclusions();
 

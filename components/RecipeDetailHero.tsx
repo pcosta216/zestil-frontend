@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Trash2 } from "@/lib/icons";
-import type { RecipeCollection } from "@/lib/supabase/queries";
+import { Trash2, Plus } from "@/lib/icons";
+import type { RecipeCollection, Collection } from "@/lib/supabase/queries";
+import { isValidUrl, formatTime, formatDate } from "@/lib/recipe-format";
+import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 
 function parseInlineMarkdown(text: string): React.ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/);
@@ -17,34 +19,52 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
   });
 }
 
-function isValidUrl(url: string): boolean {
-  try { new URL(url); return true; } catch { return false; }
-}
-
-function formatTime(value: string): string {
-  const trimmed = value.trim();
-  return /^\d+$/.test(trimmed) ? `${trimmed} min` : trimmed;
-}
-
-function formatDate(value: string): string {
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) {
-    const d = new Date(value);
-    if (!isNaN(d.getTime()))
-      return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
-  }
-  return value;
-}
-
 export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: RecipeCollection; asOverlay?: boolean }) {
   const router = useRouter();
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [collectionNames, setCollectionNames] = useState<string[]>(recipe.collection_names ?? []);
+  const [showPicker, setShowPicker] = useState(false);
+  const [allCollections, setAllCollections] = useState<Collection[]>([]);
+  const [loadingCollections, setLoadingCollections] = useState(false);
+  const [checked, setChecked] = useState<Set<number>>(new Set());
+  const visibleNames = collectionNames.filter((n) => n.toLowerCase() !== "main");
+  const available = allCollections.filter(
+    (c) => c.name.toLowerCase() !== "main" && !collectionNames.includes(c.name)
+  );
   const imageUrl = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
 
   async function handleDelete() {
     setDeleting(true);
     await fetch(`/api/recipe/${recipe.recipe_uuid}`, { method: "DELETE" });
     router.push("/zestil?tab=saved");
+  }
+
+  async function openPicker() {
+    setChecked(new Set());
+    setShowPicker(true);
+    setLoadingCollections(true);
+    try {
+      const res = await fetch("/api/recipe/collections");
+      if (res.ok) setAllCollections(await res.json());
+    } finally {
+      setLoadingCollections(false);
+    }
+  }
+
+  async function closePicker() {
+    setShowPicker(false);
+    if (checked.size === 0) return;
+    const ids = Array.from(checked);
+    const res = await fetch("/api/recipe/collections", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipe_uuid: recipe.recipe_uuid, collection_ids: ids }),
+    });
+    if (!res.ok) return;
+    const added = allCollections.filter((c) => checked.has(c.id)).map((c) => c.name);
+    setCollectionNames((prev) => [...prev, ...added]);
+    router.refresh();
   }
 
   return (
@@ -192,16 +212,21 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
         })()}
 
         {/* Collection labels */}
-        {recipe.collection_names && recipe.collection_names.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs text-text-muted">Collections</span>
-            {recipe.collection_names.map((name) => (
-              <span key={name} className="text-xs font-medium text-green-primary bg-green-light border border-green-border px-3 py-1 rounded-full">
-                {name}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-text-muted">Collections</span>
+          <button
+            onClick={openPicker}
+            aria-label="Add to collections"
+            className="w-5 h-5 rounded-full bg-green-primary text-white flex items-center justify-center hover:bg-green-primary/90 active:bg-green-primary/80 transition-colors"
+          >
+            <Plus size={12} strokeWidth={2.5} />
+          </button>
+          {visibleNames.map((name) => (
+            <span key={name} className="text-xs font-medium text-green-primary bg-green-light border border-green-border px-3 py-1 rounded-full">
+              {name}
+            </span>
+          ))}
+        </div>
 
         {/* Macros */}
         {recipe.recipe_data?.recipe_totals && recipe.recipe_data.recipe_totals.length > 0 && (() => {
@@ -273,6 +298,60 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
           </button>
         )}
       </div>
+
+      {/* Collection picker */}
+      {showPicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-6" onClick={closePicker}>
+          <div
+            className="bg-white rounded-2xl w-full max-w-sm shadow-xl flex flex-col max-h-[70vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 py-3 border-b border-[rgba(0,0,0,0.06)]">
+              <span className="text-[11px] font-medium text-text-muted uppercase tracking-wide">Add to collections</span>
+            </div>
+            <div className="flex-1 overflow-y-auto py-1">
+              {loadingCollections ? (
+                <p className="text-[12px] text-text-muted px-4 py-3">Loading…</p>
+              ) : available.length === 0 ? (
+                <p className="text-[12px] text-text-muted px-4 py-3">No more collections available</p>
+              ) : (
+                available.map((col) => (
+                  <label key={col.id} className="flex items-center gap-2.5 px-4 py-2.5 hover:bg-warm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={checked.has(col.id)}
+                      onChange={() => setChecked((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(col.id)) next.delete(col.id); else next.add(col.id);
+                        return next;
+                      })}
+                      className="accent-green-primary w-3.5 h-3.5"
+                    />
+                    <span className="text-sm text-text-main">{col.name}</span>
+                  </label>
+                ))
+              )}
+              {!loadingCollections && (
+                <CreateCollectionButton
+                  className="px-4 py-2.5"
+                  onCreated={(c) => {
+                    setAllCollections((prev) => [...prev, c]);
+                    setChecked((prev) => new Set(prev).add(c.id));
+                  }}
+                />
+              )}
+            </div>
+            <div className="px-4 py-3 border-t border-[rgba(0,0,0,0.06)]">
+              <button
+                onClick={closePicker}
+                className="w-full text-sm font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-2 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation dialog */}
       {showConfirm && (

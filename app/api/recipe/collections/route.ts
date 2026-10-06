@@ -1,5 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getCollections } from "@/lib/supabase/queries";
+
+export async function GET() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  try {
+    return NextResponse.json(await getCollections(user.id));
+  } catch (e) {
+    console.error("[recipe/collections] supabase error:", e);
+    return NextResponse.json({ error: "Failed to load collections" }, { status: 500 });
+  }
+}
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();

@@ -92,8 +92,10 @@ async function main() {
   // Two round trips behind one tap: /answer advances to n_compile, whose effect POSTs /commit.
   // Waited for explicitly — a fixed sleep raced the second one on a cold dev route.
   await cta.click();
+  // Lands on the recipe-discovery screen, which replaced "You're all set" — see
+  // docs/app/onboarding/discovery_progress.md. Either heading means the commit went through.
   const finished = await page
-    .getByRole("heading", { name: /you.?re all set/i })
+    .getByRole("heading", { name: /finding recipes you.ll like|your recipes are ready/i })
     .waitFor({ timeout: 25000 })
     .then(() => true)
     .catch(() => false);

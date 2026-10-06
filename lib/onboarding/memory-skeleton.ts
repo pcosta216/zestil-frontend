@@ -95,3 +95,44 @@ export function emptyUserMemory(): UserMemory {
     other: {},
   };
 }
+
+/**
+ * Overlays a stored memory_json onto a fresh skeleton, so every path the schema defines exists
+ * with the right SHAPE even when the stored row only covers part of it.
+ *
+ * Without this, a partial row reaches the engine as-is and `writeScalarOrArray` — which decides
+ * append-vs-overwrite by asking whether the CURRENT value is an array — sees `undefined` at a
+ * missing path and writes a bare scalar. `dietary.diet_type.preferred` then holds "vegetarian"
+ * rather than ["vegetarian"], and the next screen that reads it as a list either throws
+ * (options-filter's `.filter`) or, worse, iterates the string's characters and silently applies
+ * nothing. Reproduced end to end; see smoke-test.ts scenario W.
+ *
+ * Rules, in order:
+ *  - stored array      -> replaces the skeleton's wholesale (never merged element-wise; a user
+ *                         who deselected everything must end up with [], not the default)
+ *  - skeleton array, stored scalar -> wrapped as [stored]. Schema conformance, and it repairs a
+ *                         row already written the broken way on its next save rather than
+ *                         leaving it to throw forever
+ *  - both plain objects -> recursed
+ *  - anything else      -> stored wins; a key the skeleton has never heard of is kept as-is
+ *                         (memory.other.<section> is open-ended by design)
+ */
+export function mergeIntoSkeleton(stored: unknown): UserMemory {
+  const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+    typeof v === "object" && v !== null && !Array.isArray(v);
+
+  function merge(base: unknown, incoming: unknown): unknown {
+    if (incoming === undefined) return base;
+    if (Array.isArray(base) && !Array.isArray(incoming)) {
+      return incoming === null ? base : [incoming];
+    }
+    if (isPlainObject(base) && isPlainObject(incoming)) {
+      const out: Record<string, unknown> = { ...base };
+      for (const [k, v] of Object.entries(incoming)) out[k] = merge(base[k], v);
+      return out;
+    }
+    return incoming;
+  }
+
+  return merge(emptyUserMemory(), stored) as UserMemory;
+}

@@ -1,6 +1,6 @@
 # n_compile — the terminal commit node
 
-Status: live · Last verified: 2026-09-22
+Status: live · Last verified: 2026-10-06
 Component: none (never rendered) — `app/onboarding/OnboardingFlow.tsx` auto-commits on arrival ·
 Config: `content/onboarding/flow-structure.yaml`
 Verify: `scripts/onboarding-seed/verify-summary-screen.mjs` (its last two checks drive a real
@@ -10,8 +10,9 @@ through it to terminal, but `commitUserMemory` itself is only reachable via
 
 `type: system`, `next: null` — the flow's `meta.exit_node`. Not user-facing. `OnboardingFlow`'s
 effect fires the moment `node.id === "n_compile"`, POSTs `/api/onboarding/commit`, and on success
-swaps the whole screen for the "You're all set" panel with a **Go to my plan** button to
-`/zestil`.
+swaps the whole screen for the recipe-discovery progress screen
+([discovery_progress.md](./discovery_progress.md)), which replaced the old "You're all set"
+panel and gates the trip to `/zestil` on discovery actually finishing.
 
 ## Behaviour
 

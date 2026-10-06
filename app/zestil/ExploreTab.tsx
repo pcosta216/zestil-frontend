@@ -5,6 +5,7 @@ import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { createClient } from "@/lib/supabase/browser";
 import { Heart } from "@/lib/icons";
+import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 
 interface MealCard {
   day: string;
@@ -168,7 +169,7 @@ function TypingIndicator() {
   );
 }
 
-export function ExploreTab({ collections: rawCollections = [], onRecipeSaved }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void }) {
+export function ExploreTab({ collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void; onCollectionCreated?: (c: { id: number; name: string }) => void }) {
   const supabase = createClient();
   const collections = rawCollections.filter((c) => c.name.toLowerCase() !== "main");
   const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
@@ -358,6 +359,12 @@ export function ExploreTab({ collections: rawCollections = [], onRecipeSaved }: 
                                   </label>
                                 ))
                               )}
+                              <CreateCollectionButton
+                                onCreated={(c) => {
+                                  onCollectionCreated?.(c);
+                                  setChecked((prev) => new Set(prev).add(c.id));
+                                }}
+                              />
                             </div>
                             <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
                               <button
