@@ -28,6 +28,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
   const [allCollections, setAllCollections] = useState<Collection[]>([]);
   const [loadingCollections, setLoadingCollections] = useState(false);
   const [checked, setChecked] = useState<Set<number>>(new Set());
+  const [createDirty, setCreateDirty] = useState(false);
   const visibleNames = collectionNames.filter((n) => n.toLowerCase() !== "main");
   const available = allCollections.filter(
     (c) => c.name.toLowerCase() !== "main" && !collectionNames.includes(c.name)
@@ -301,7 +302,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
 
       {/* Collection picker */}
       {showPicker && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-6" onClick={closePicker}>
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 px-6" onClick={() => { if (!createDirty) closePicker(); }}>
           <div
             className="bg-white rounded-2xl w-full max-w-sm shadow-xl flex flex-col max-h-[70vh]"
             onClick={(e) => e.stopPropagation()}
@@ -331,20 +332,24 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
                   </label>
                 ))
               )}
-              {!loadingCollections && (
+            </div>
+            {!loadingCollections && (
+              <div className="flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
                 <CreateCollectionButton
                   className="px-4 py-2.5"
+                  onDirtyChange={setCreateDirty}
                   onCreated={(c) => {
                     setAllCollections((prev) => [...prev, c]);
                     setChecked((prev) => new Set(prev).add(c.id));
                   }}
                 />
-              )}
-            </div>
+              </div>
+            )}
             <div className="px-4 py-3 border-t border-[rgba(0,0,0,0.06)]">
               <button
                 onClick={closePicker}
-                className="w-full text-sm font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-2 transition-colors"
+                disabled={createDirty}
+                className="w-full text-sm font-medium text-white bg-green-primary hover:bg-green-dark rounded-full py-2 transition-colors disabled:opacity-50"
               >
                 Save
               </button>

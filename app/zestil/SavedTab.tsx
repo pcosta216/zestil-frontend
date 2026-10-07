@@ -43,6 +43,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
   const [addSaving, setAddSaving] = useState(false);
   const [pickCollectionsOpen, setPickCollectionsOpen] = useState(false);
   const [checkedCollections, setCheckedCollections] = useState<Set<number>>(new Set());
+  const [createDirty, setCreateDirty] = useState(false);
   const [banner, setBanner] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -344,8 +345,11 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
                   </label>
                 ))
               )}
+            </div>
+            <div className="flex-shrink-0">
               <CreateCollectionButton
                 className="px-3 py-2.5"
+                onDirtyChange={setCreateDirty}
                 onCreated={(c) => {
                   onCollectionCreated?.(c);
                   setCheckedCollections((prev) => new Set(prev).add(c.id));
@@ -354,7 +358,8 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
             </div>
             <button
               onClick={() => setPickCollectionsOpen(false)}
-              className="px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors"
+              disabled={createDirty}
+              className="px-4 py-2.5 rounded-xl bg-green-primary hover:bg-green-primary/90 text-white text-sm font-medium transition-colors disabled:opacity-50"
             >
               Done
             </button>

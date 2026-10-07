@@ -443,6 +443,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
   const [optimisingDate, setOptimisingDate] = useState<string | null>(null);
   const [pickerMsgId,    setPickerMsgId]    = useState<string | null>(null);
   const [checked,        setChecked]        = useState<Set<number>>(new Set());
+  const [createDirty, setCreateDirty] = useState(false);
   const [hearted,        setHearted]        = useState<Set<string>>(new Set());
   const [saving,         setSaving]         = useState<Set<string>>(new Set());
   const [saved,          setSaved]          = useState<Set<string>>(new Set());
@@ -804,6 +805,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                 <>
                   {pickerMsgId === msg.id && (
                     <div className="fixed inset-0 z-[9]" onClick={() => {
+                      if (createDirty) return;
                       setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
                       setPickerMsgId(null);
                     }} />
@@ -814,6 +816,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                         disabled={saving.has(msg.id) || saved.has(msg.id)}
                         onClick={() => {
                           if (saved.has(msg.id)) return;
+                          if (createDirty) return;
                           setHearted((prev) => { const next = new Set(prev); next.has(msg.id) ? next.delete(msg.id) : next.add(msg.id); return next; });
                           setPickerMsgId((prev) => prev === msg.id ? null : msg.id);
                           setChecked(new Set());
@@ -852,7 +855,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                                 </label>
                               ))
                             )}
+                          </div>
+                          <div className="flex-shrink-0 border-t border-[rgba(0,0,0,0.06)]">
                             <CreateCollectionButton
+                              onDirtyChange={setCreateDirty}
                               onCreated={(c) => {
                                 onCollectionCreated?.(c);
                                 setChecked((prev) => new Set(prev).add(c.id));
@@ -861,7 +867,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                           </div>
                           <div className="px-3 py-2 border-t border-[rgba(0,0,0,0.06)] flex-shrink-0">
                             <button
-                              disabled={saving.has(msg.id)}
+                              disabled={saving.has(msg.id) || createDirty}
                               onClick={async () => {
                                 setPickerMsgId(null);
                                 setSaving((prev) => new Set(prev).add(msg.id));

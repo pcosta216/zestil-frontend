@@ -1,19 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 interface Props {
   onCreated: (c: { id: number; name: string }) => void;
   className?: string;
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
 // "+ Create new collection" row for the end of a collections checklist. Swaps itself for an
 // inline name input; the parent adds the returned collection to its list (and usually checks it).
-export function CreateCollectionButton({ onCreated, className = "px-3 py-2" }: Props) {
+export function CreateCollectionButton({ onCreated, className = "px-3 py-2", onDirtyChange }: Props) {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dirty = creating && name.trim().length > 0;
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+  }, [dirty, onDirtyChange]);
 
   function cancel() {
     setCreating(false);
@@ -73,6 +79,9 @@ export function CreateCollectionButton({ onCreated, className = "px-3 py-2" }: P
         className="w-full bg-warm border border-[rgba(0,0,0,0.1)] rounded-xl px-3 py-2 text-[13px] text-text-main placeholder:text-[#B4B2A9] outline-none focus:border-green-mid transition-colors disabled:opacity-60"
       />
       {error && <p className="text-[11px] text-red-500">{error}</p>}
+      {dirty && !saving && !error && (
+        <p className="text-[11px] text-text-muted">Press Create (or Enter) to add this collection</p>
+      )}
       <div className="flex gap-2">
         <button
           type="button"
