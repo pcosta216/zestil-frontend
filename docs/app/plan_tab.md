@@ -52,7 +52,13 @@ trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`).
 | `ingredients_list` | `WeekdayRecipeCard` rows (`cardVariant="ingredient"`) with an Add action |
 | `recipe` | markdown + a hero image if `metadata.media.image_url` is set |
 | `feedback` | generic markdown bubble, content is the `ui_body` (below). `meal_cards` / `changed_dates` are **ignored** on this type, so the reply neither renders a plan grid nor triggers the day-view re-fetch — the chat just continues |
-| anything else (`info`, …) | generic markdown bubble |
+| `info` (also a missing `response_type`) | generic markdown bubble. `meal_cards` / `changed_dates` are **ignored**, same as `feedback`: any cards would otherwise hide the bubble (below) and the sentence with it |
+| anything else | generic markdown bubble |
+
+For every type except `feedback` and `info`, a reply that has `meal_cards` shows the grid **instead
+of** its bubble — the `!(msg.mealCards?.length)` guard in the render (since 2026-05-08, `ce84e7d`),
+so the text is never shown. That is by design for `week_plan` / `day_update`, whose text is the plan
+spelled out; it would also hide a `suggestion_pending` reply's Confirm / Keep buttons.
 
 **`ui_body`** (any response type; contract in `docs/UI_BODY_CONTRACT.md`): parsed by
 `lib/ui-body.ts:parseUiBody` (unknown block types dropped) and rendered by

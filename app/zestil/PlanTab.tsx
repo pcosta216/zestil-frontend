@@ -671,13 +671,16 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
 
       const data = await res.json();
       console.log("[plan] raw response:", data);
-      const { response, response_type, ingredient_cards, quick_replies } = data;
-      // `feedback` means nothing the plan shows has changed — the ui_body is the content and the chat
-      // simply continues. The planner can still send cards from a read-only tool it ran this turn
-      // (get_week_plan); acting on them would echo the plan back and re-fetch the day below the reply.
-      const isFeedback    = response_type === "feedback";
-      const meal_cards    = isFeedback ? [] : data.meal_cards;
-      const changed_dates = isFeedback ? [] : data.changed_dates;
+      const { response, ingredient_cards, quick_replies } = data;
+      const responseType: ResponseType = (data.response_type as ResponseType) ?? "info";
+      // `feedback` and `info` show no plan view: for `feedback` nothing the plan shows has changed
+      // (the ui_body is the content), and `info` is the catch-all, so its text is the content. Either
+      // can still arrive with cards (a read-only tool the planner ran this turn, e.g. get_week_plan),
+      // but any cards would hide the bubble and the sentence along with it, and a day-view re-fetch
+      // below the reply would echo the plan back. Plan replies have their own types and keep the grid.
+      const textOnly      = responseType === "feedback" || responseType === "info";
+      const meal_cards    = textOnly ? [] : data.meal_cards;
+      const changed_dates = textOnly ? [] : data.changed_dates;
 
       // Update active date from the most recent day the agent touched
       const datesInResponse: string[] = [
@@ -695,7 +698,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
         id:              `agent-${Date.now()}`,
         type:            "agent",
         content:         response?.trim() || "Sorry, I couldn't generate a response.",
-        responseType:    (response_type as ResponseType) ?? "info",
+        responseType,
         mealCards:       meal_cards?.length ? meal_cards : undefined,
         ingredientCards: ingredient_cards?.length ? ingredient_cards : undefined,
         changedDates:    changed_dates?.length ? changed_dates : undefined,
