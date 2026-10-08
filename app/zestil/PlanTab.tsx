@@ -8,6 +8,8 @@ import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 import { createClient } from "@/lib/supabase/browser";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
+import { UiBodyBlocks } from "@/components/UiBodyBlocks";
+import { parseUiBody, type UiBody } from "@/lib/ui-body";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -19,6 +21,7 @@ type ResponseType =
   | "macro_summary"
   | "suggestion_pending"
   | "ingredients_list"
+  | "feedback"
   | "info";
 
 interface MealCard {
@@ -55,6 +58,7 @@ type AgentMessage = {
   quickReplies?: string[];
   metadata?: Record<string, any>;
   recipeUuid?: string;
+  uiBody?: UiBody;
 };
 
 type UserMessage = {
@@ -647,7 +651,13 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
 
       const data = await res.json();
       console.log("[plan] raw response:", data);
-      const { response, response_type, meal_cards, ingredient_cards, quick_replies, changed_dates } = data;
+      const { response, response_type, ingredient_cards, quick_replies } = data;
+      // `feedback` means nothing the plan shows has changed — the ui_body is the content and the chat
+      // simply continues. The planner can still send cards from a read-only tool it ran this turn
+      // (get_week_plan); acting on them would echo the plan back and re-fetch the day below the reply.
+      const isFeedback    = response_type === "feedback";
+      const meal_cards    = isFeedback ? [] : data.meal_cards;
+      const changed_dates = isFeedback ? [] : data.changed_dates;
 
       // Update active date from the most recent day the agent touched
       const datesInResponse: string[] = [
@@ -671,6 +681,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
         changedDates:    changed_dates?.length ? changed_dates : undefined,
         metadata:        data.metadata ?? undefined,
         recipeUuid:      data.recipe_uuid,
+        uiBody:          parseUiBody(data.ui_body),
       };
 
       setMessages((prev) => [...prev, agentMsg]);
@@ -800,7 +811,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
             </div>
           ) : (
             <React.Fragment key={msg.id}>
-              {!(msg.mealCards?.length) && <AgentBubble msg={msg} onSend={sendMessage} />}
+              {/* A ui_body text block is the authoritative confirmation, so it replaces the model's sentence. */}
+              {!(msg.mealCards?.length) && !msg.uiBody?.blocks.some((b) => b.type === "text") && <AgentBubble msg={msg} onSend={sendMessage} />}
               {msg.responseType === "recipe" && (
                 <>
                   {pickerMsgId === msg.id && (
@@ -951,6 +963,16 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
+              )}
+              {msg.uiBody && (
+                <UiBodyBlocks
+                  uiBody={msg.uiBody}
+                  onReplace={(next) => {
+                    // In-place patch of one block, like a delete: don't yank the chat to the bottom.
+                    skipNextScroll.current = true;
+                    setMessages((prev) => prev.map((m) => m.id === msg.id && m.type === "agent" ? { ...m, uiBody: next } : m));
+                  }}
+                />
               )}
             </React.Fragment>
           )

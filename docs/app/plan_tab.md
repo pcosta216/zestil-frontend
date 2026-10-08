@@ -51,7 +51,16 @@ trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`).
 | `suggestion_pending` | Confirm / Reject buttons that resend the canned phrases `"Yes, confirm the change"` / `"No, keep the original"` |
 | `ingredients_list` | `WeekdayRecipeCard` rows (`cardVariant="ingredient"`) with an Add action |
 | `recipe` | markdown + a hero image if `metadata.media.image_url` is set |
+| `feedback` | generic markdown bubble, content is the `ui_body` (below). `meal_cards` / `changed_dates` are **ignored** on this type, so the reply neither renders a plan grid nor triggers the day-view re-fetch — the chat just continues |
 | anything else (`info`, …) | generic markdown bubble |
+
+**`ui_body`** (any response type; contract in `docs/UI_BODY_CONTRACT.md`): parsed by
+`lib/ui-body.ts:parseUiBody` (unknown block types dropped) and rendered below the bubble by
+`components/UiBodyBlocks.tsx` — `text`, `button`, `choice`. A button/choice `call` goes from the
+browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the user's JWT
+(allowlist: `sides-catalog`), then the reply's `ui_body` (or its `message` as a `text` block)
+replaces the blocks on that one chat message, without scrolling the chat. If `ui_body` has a
+`text` block, the model's own sentence is not shown.
 
 **Day/week grid** (`DayGrids`, `PlanTab.tsx:304-372`): groups `MealCard[]` by weekday, sorts
 within a day by the account's `meal_slots` order then `main → side → dessert` (`ROLE_ORDER`), and
