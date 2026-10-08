@@ -272,6 +272,26 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
   );
 }
 
+// A message carrying `ui_body` gets one bubble in place of AgentBubble: the text blocks, or the
+// model's own sentence when there are none (the text block is the authoritative confirmation), with
+// the controls under it. Cards already suppress the model's sentence, so a message with cards gets a
+// bubble of just the blocks below them. A response type with its own bubble layout (recipe,
+// suggestion_pending…) that starts carrying ui_body needs a deliberate decision here (contract §2).
+function UiBodyBubble({ msg, uiBody, onReplace }: { msg: AgentMessage; uiBody: UiBody; onReplace: (next: UiBody) => void }) {
+  const showLead = !uiBody.blocks.some((b) => b.type === "text") && !msg.mealCards?.length;
+  return (
+    <div className="flex gap-2.5 items-start max-w-[95%]">
+      <AgentIcon />
+      <div className="flex flex-col gap-1.5 min-w-0 w-full">
+        <div className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main flex flex-col gap-2.5" style={{ borderRadius: "4px 16px 16px 16px" }}>
+          {showLead && <div className="chat-markdown"><Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown></div>}
+          <UiBodyBlocks uiBody={uiBody} onReplace={onReplace} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ordinalDate(dateStr?: string): string | undefined {
   if (!dateStr) return undefined;
   const d = new Date(dateStr + "T00:00:00");
@@ -811,8 +831,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
             </div>
           ) : (
             <React.Fragment key={msg.id}>
-              {/* A ui_body text block is the authoritative confirmation, so it replaces the model's sentence. */}
-              {!(msg.mealCards?.length) && !msg.uiBody?.blocks.some((b) => b.type === "text") && <AgentBubble msg={msg} onSend={sendMessage} />}
+              {/* A message with a ui_body gets UiBodyBubble (below) instead of this bubble. */}
+              {!(msg.mealCards?.length) && !msg.uiBody && <AgentBubble msg={msg} onSend={sendMessage} />}
               {msg.responseType === "recipe" && (
                 <>
                   {pickerMsgId === msg.id && (
@@ -965,7 +985,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                 <IngredientList cards={msg.ingredientCards!} onSend={sendMessage} />
               )}
               {msg.uiBody && (
-                <UiBodyBlocks
+                <UiBodyBubble
+                  msg={msg}
                   uiBody={msg.uiBody}
                   onReplace={(next) => {
                     // In-place patch of one block, like a delete: don't yank the chat to the bottom.

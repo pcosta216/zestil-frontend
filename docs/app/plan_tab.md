@@ -55,8 +55,10 @@ trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`).
 | anything else (`info`, …) | generic markdown bubble |
 
 **`ui_body`** (any response type; contract in `docs/UI_BODY_CONTRACT.md`): parsed by
-`lib/ui-body.ts:parseUiBody` (unknown block types dropped) and rendered below the bubble by
-`components/UiBodyBlocks.tsx` — `text`, `button`, `choice`. A button/choice `call` goes from the
+`lib/ui-body.ts:parseUiBody` (unknown block types dropped) and rendered by
+`components/UiBodyBlocks.tsx` — `text`, `button`, `choice` — inside `UiBodyBubble`, one agent
+bubble that replaces `AgentBubble` for that message (a message with cards gets a bubble of just the
+blocks below the cards). A button/choice `call` goes from the
 browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the user's JWT
 (allowlist: `sides-catalog`), then the reply's `ui_body` (or its `message` as a `text` block)
 replaces the blocks on that one chat message, without scrolling the chat. If `ui_body` has a
