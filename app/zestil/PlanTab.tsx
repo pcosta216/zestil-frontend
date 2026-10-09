@@ -709,13 +709,19 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
 
       setMessages((prev) => [...prev, agentMsg]);
 
-      // If the agent touched the day the user is following, append a fresh block for it below the
-      // reply. setActive:false because activeDate was just resolved from the response above and the
+      // If the agent changed the day the user is following, append a fresh block for it below the
+      // reply so the transcript ends on its current state. A turn that only shows a day ("show me
+      // today") has nothing to refresh: its cards are already in the reply and are the only thing in
+      // datesInResponse, so fetching again would draw the same cards twice.
+      // setActive:false because activeDate was just resolved from the response above and the
       // append must not overwrite that decision — notably the multi-day case that clears it.
-      if (selectedDate === "") {
-        if (datesInResponse.length) appendWeekView({ setActive: false }).catch(() => {});
-      } else if (datesInResponse.includes(selectedDate)) {
-        appendDayView(selectedDate, { setActive: false }).catch(() => {});
+      const changedPlan = responseType === "day_update" || (changed_dates?.length ?? 0) > 0;
+      if (changedPlan) {
+        if (selectedDate === "") {
+          if (datesInResponse.length) appendWeekView({ setActive: false }).catch(() => {});
+        } else if (datesInResponse.includes(selectedDate)) {
+          appendDayView(selectedDate, { setActive: false }).catch(() => {});
+        }
       }
       if (response?.trim() && response.trim() !== 'Sorry, I could not generate a response.') {
         apiHistory.current.push({ role: "agent", content: agentMsg.content });

@@ -39,7 +39,10 @@ tracked separately from the planner's own. `activeDate` (a ref) tracks the one d
 currently talking about — set from `changed_dates`/`meal_cards[].date` when a reply touches
 exactly one date, cleared to `null` on a multi-day reply, also set by tapping a date-strip day —
 sent as `active_date` on every request, and read back to decide whether a reply should also
-trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`).
+trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`). That append only
+happens for a reply that **changed the plan** (`response_type: "day_update"` or non-empty
+`changed_dates`); a reply that merely shows a day already carries its cards, so re-fetching it
+would draw them twice.
 
 `response_type` selects the bubble:
 
