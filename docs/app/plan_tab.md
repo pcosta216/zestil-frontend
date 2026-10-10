@@ -64,14 +64,29 @@ so the text is never shown. That is by design for `week_plan` / `day_update`, wh
 spelled out; it would also hide a `suggestion_pending` reply's Confirm / Keep buttons.
 
 **`ui_body`** (any response type; contract in `docs/UI_BODY_CONTRACT.md`): parsed by
-`lib/ui-body.ts:parseUiBody` (unknown block types dropped) and rendered by
-`components/UiBodyBlocks.tsx` — `text`, `button`, `choice` — inside `UiBodyBubble`, one agent
-bubble that replaces `AgentBubble` for that message (a message with cards gets a bubble of just the
-blocks below the cards). A button/choice `call` goes from the
-browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the user's JWT
-(allowlist: `sides-catalog`), then the reply's `ui_body` (or its `message` as a `text` block)
-replaces the blocks on that one chat message, without scrolling the chat. If `ui_body` has a
-`text` block, the model's own sentence is not shown.
+`lib/ui-body.ts:parseUiBody` (unknown block types dropped, unknown `text` styles kept as body) and
+rendered by `components/UiBodyBlocks.tsx` inside `UiBodyBubble`, one agent bubble that replaces
+`AgentBubble` for that message (a message with cards gets a bubble of just the blocks below the
+cards). Blocks: `text` (body / header / sub_header), `button`, `choice`, `button_group` (optionally
+collapsed to one tappable row) and `nutrition` (hidden until a `toggle` shows it; drawn with
+`components/MacroRings.tsx`, the recipe card's macro rings — values rounded, a missing key gets no
+ring, one row from 250px wide and 3 + 3 below that). Icons are a closed name → lucide map (`ICONS`); an unknown name
+draws none.
+
+Actions: a `call` goes from the browser straight to
+`<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the user's JWT (allowlist in
+`UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`); a `toggle` is local state only. A button
+with no action, an unknown action kind, a non-allowlisted endpoint or a `toggle` whose target is
+missing renders disabled. A call's **scope** is the whole body, or just the `button_group` its
+button sits in: only that scope is disabled while the call is in flight (pending is tracked per
+scope), and the reply (`ui_body`, or its `message` as a `text` block) replaces only that scope.
+A replaced group becomes a frontend-only `slot` block; a call from inside it replaces the slot
+again (Remove → Undo → "Restored" in the same place). Local state (selected option, expanded group,
+shown panel, pending, error) is keyed by scope + id, never the bare id, because reply ids like
+`undo` repeat. Replies are applied through an updater (`onChange(prev => …)`), so two groups
+resolving together don't overwrite each other, and without scrolling the chat. The model's own
+sentence is hidden only when a *body* `text` block says it already — a list's header lines don't
+count, so its category counts stay visible.
 
 **Day/week grid** (`DayGrids`, `PlanTab.tsx:304-372`): groups `MealCard[]` by weekday, sorts
 within a day by the account's `meal_slots` order then `main → side → dessert` (`ROLE_ORDER`), and

@@ -14,5 +14,11 @@ import { Sparkles } from 'lucide-react';
 import { Check } from 'lucide-react';
 import { X } from 'lucide-react';
 import { LoaderCircle } from 'lucide-react';
+import { Pencil } from 'lucide-react';
+import { ToggleRight } from 'lucide-react';
+import { Undo2 } from 'lucide-react';
+import { TriangleAlert } from 'lucide-react';
+import { ArrowLeftRight } from 'lucide-react';
+import { ChevronDown } from 'lucide-react';
 
-export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus, Heart, Trash2, CircleEllipsis, Info, Gauge, Sparkles, Check, X, LoaderCircle };
+export { Utensils, CircleOff, ImageOff, BookOpenText, Search, CirclePlus, Plus, Heart, Trash2, CircleEllipsis, Info, Gauge, Sparkles, Check, X, LoaderCircle, Pencil, ToggleRight, Undo2, TriangleAlert, ArrowLeftRight, ChevronDown };

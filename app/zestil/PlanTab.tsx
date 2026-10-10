@@ -9,7 +9,7 @@ import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 import { createClient } from "@/lib/supabase/browser";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
-import { parseUiBody, type UiBody } from "@/lib/ui-body";
+import { hasBodyText, parseUiBody, type UiBody } from "@/lib/ui-body";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -272,20 +272,21 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
   );
 }
 
-// A message carrying `ui_body` gets one bubble in place of AgentBubble: the text blocks, or the
-// model's own sentence when there are none (the text block is the authoritative confirmation), with
-// the controls under it. Cards already suppress the model's sentence, so a message with cards gets a
-// bubble of just the blocks below them. A response type with its own bubble layout (recipe,
-// suggestion_pending…) that starts carrying ui_body needs a deliberate decision here (contract §2).
-function UiBodyBubble({ msg, uiBody, onReplace }: { msg: AgentMessage; uiBody: UiBody; onReplace: (next: UiBody) => void }) {
-  const showLead = !uiBody.blocks.some((b) => b.type === "text") && !msg.mealCards?.length;
+// A message carrying `ui_body` gets one bubble in place of AgentBubble: the blocks, led by the
+// model's own sentence unless a body `text` block already says it (that block is the authoritative
+// confirmation; header and sub_header lines over a list are not). Cards already suppress the model's
+// sentence, so a message with cards gets a bubble of just the blocks below them. A response type
+// with its own bubble layout (recipe, suggestion_pending…) that starts carrying ui_body needs a
+// deliberate decision here (contract §2).
+function UiBodyBubble({ msg, uiBody, onChange }: { msg: AgentMessage; uiBody: UiBody; onChange: (update: (prev: UiBody) => UiBody) => void }) {
+  const showLead = !hasBodyText(uiBody.blocks) && !msg.mealCards?.length;
   return (
     <div className="flex gap-2.5 items-start max-w-[95%]">
       <AgentIcon />
       <div className="flex flex-col gap-1.5 min-w-0 w-full">
         <div className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main flex flex-col gap-2.5" style={{ borderRadius: "4px 16px 16px 16px" }}>
           {showLead && <div className="chat-markdown"><Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown></div>}
-          <UiBodyBlocks uiBody={uiBody} onReplace={onReplace} />
+          <UiBodyBlocks uiBody={uiBody} onChange={onChange} />
         </div>
       </div>
     </div>
@@ -997,10 +998,12 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                 <UiBodyBubble
                   msg={msg}
                   uiBody={msg.uiBody}
-                  onReplace={(next) => {
+                  onChange={(update) => {
                     // In-place patch of one block, like a delete: don't yank the chat to the bottom.
+                    // An updater, not a value: two groups can resolve close together, and each must
+                    // apply to the body the other already changed.
                     skipNextScroll.current = true;
-                    setMessages((prev) => prev.map((m) => m.id === msg.id && m.type === "agent" ? { ...m, uiBody: next } : m));
+                    setMessages((prev) => prev.map((m) => m.id === msg.id && m.type === "agent" && m.uiBody ? { ...m, uiBody: update(m.uiBody) } : m));
                   }}
                 />
               )}
