@@ -33,7 +33,12 @@ export type UiBlock =
       caption: string;
       select: "single";
       options: UiChoiceOption[];
+      // The option whose `value` is already the current one, as a string. Absent, or matching no option,
+      // means nothing starts selected. Save is only worth pressing for a different option.
+      selected?: string;
       submit: { caption: string; icon?: string | null; action?: UiAction };
+      // A second button on the submit's line (a call or a `replace`, never `{value}`), same scope as the submit.
+      cancel?: { caption: string; icon?: string | null; action?: UiAction };
     }
   | { type: "button_group"; id: string; caption: string; detail?: string; collapsed?: boolean; buttons: UiButton[] }
   | { type: "nutrition"; id?: string; caption: string; hidden?: boolean; macros: UiMacros }
@@ -132,13 +137,19 @@ function parseBlock(raw: unknown): UiBlock | undefined {
         .filter((o: unknown) => isObj(o) && isStr(o.caption) && isStr(o.value))
         .map((o: any) => ({ caption: o.caption, detail: isStr(o.detail) ? o.detail : undefined, value: o.value }));
       if (!options.length) return undefined;
+      const cancel = isObj(raw.cancel) && isStr(raw.cancel.caption)
+        ? { caption: raw.cancel.caption, icon: isStr(raw.cancel.icon) ? raw.cancel.icon : null, action: parseAction(raw.cancel.action) }
+        : undefined;
       return {
         type: "choice",
         id: raw.id,
         caption: raw.caption,
         select: "single",
         options,
+        // Values are compared as strings (never by index or caption), so a number the agent sent is its string.
+        selected: raw.selected === undefined || raw.selected === null ? undefined : String(raw.selected),
         submit: { caption: raw.submit.caption, icon: isStr(raw.submit.icon) ? raw.submit.icon : null, action: parseAction(raw.submit.action) },
+        cancel,
       };
     }
     case "button_group": {

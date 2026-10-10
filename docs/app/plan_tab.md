@@ -70,7 +70,17 @@ rendered by `components/UiBodyBlocks.tsx` inside `UiBodyBubble`, one agent bubbl
 cards).
 
 Blocks:
-- `text` (body / header / sub_header), `button` and `choice`.
+- `text` (body / header / sub_header) and `button`.
+- `choice`: a radio list in a component of its own (`ChoiceBlock`), so each form keeps its pick in its
+  own state and reads `selected` when it mounts. It must not live in the parent, or an Edit form that
+  reappears in the same row (same id, via a local `replace`) would inherit the last form's pick.
+  `selected` is compared as a string against `option.value` (a number is stringified); no match means
+  nothing is selected. Save is disabled while the pick equals `selected`, so it enables only for a
+  different option and disables again if the original is picked back; with no `selected`, any pick
+  enables it. `cancel` is a second button on Save's line (always enabled unless a call is in flight):
+  a `call` or a `replace`, never `{value}`-substituted, with the same scope as Save, so in a list
+  row both replace only that row. Save sends the picked value as an exact string (`"1.5"`). The
+  component is keyed by id and `selected`, so a form swapped in place with another baseline remounts.
 - `section`: a header (caption over detail, chevron when `collapsed`) that contains its blocks, one
   level deep. A section with no blocks left is **not drawn** (the contract leaves that to us). A hairline
   under each header separates it from what follows, so a closed section that ends the list has none;

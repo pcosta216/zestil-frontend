@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ComponentType, type ReactNode } from "react";
+import { useId, useState, type ComponentType, type ReactNode } from "react";
 import { createClient } from "@/lib/supabase/browser";
 import { MacroRings } from "@/components/MacroRings";
 import { MiniMarkdown } from "@/components/MiniMarkdown";
@@ -62,6 +62,87 @@ function Spinner({ size = 12 }: { size?: number }) {
   return <span className="rounded-full border-[1.5px] border-current border-t-transparent animate-spin inline-block" style={{ width: size, height: size }} />;
 }
 
+type ChoiceData = Extract<UiBlock, { type: "choice" }>;
+
+// One `choice`, with its own state. The pick lives here, not in the parent, because a choice can come
+// back with the same id in the same place: the snack list's Edit form arrives through a local
+// `replace` (§4.6) each time Edit is tapped, and a second form has to start from its own `selected`,
+// not from whatever was picked in the last one. A new instance reads `selected` when it mounts; the
+// caller keys it by id and `selected`, so even a form that is swapped in place mounts afresh.
+function ChoiceBlock({ block, disabled, pressed, onSubmit, onCancel }: {
+  block: ChoiceData;
+  disabled: boolean;                    // a call is in flight in this scope
+  pressed: "submit" | "cancel" | null;  // the button that started it: it shows the spinner
+  onSubmit?: (value: string) => void;   // absent: the submit action isn't usable
+  onCancel?: () => void;                // absent: the cancel action isn't usable
+}) {
+  const name = useId();
+  const options = block.options.slice(0, 5);
+  // Compared as strings against option.value, never by index or caption. No match: nothing selected.
+  const initial = options.find((o) => o.value === block.selected)?.value ?? null;
+  const [picked, setPicked] = useState<string | null>(initial);
+  // With a current value Save is for a different one, so picking the current one back turns it off
+  // again; without one, any pick will do.
+  const canSave = !disabled && !!onSubmit && picked !== null && picked !== initial;
+  const SubmitIcon = block.submit.icon ? ICONS[block.submit.icon] : undefined;
+  const CancelIcon = block.cancel?.icon ? ICONS[block.cancel.icon] : undefined;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-[12px] font-medium">{block.caption}</div>
+      <div role="radiogroup" aria-label={block.caption} className="flex flex-col gap-1">
+        {options.map((opt) => {
+          const isSelected = picked === opt.value;
+          return (
+            <label
+              key={opt.value}
+              className={`flex items-center gap-2.5 px-3 py-2 border rounded-lg transition-colors ${
+                isSelected
+                  ? "bg-green-light border-green-border"
+                  : "bg-[#faf9f6] border-[rgba(0,0,0,0.07)] hover:border-green-border"
+              } ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+            >
+              <input
+                type="radio"
+                name={`${name}-${block.id}`}
+                checked={isSelected}
+                disabled={disabled}
+                onChange={() => setPicked(opt.value)}
+                className="accent-green-primary w-3.5 h-3.5 flex-shrink-0"
+              />
+              <span className="flex flex-col items-start min-w-0">
+                <span className="font-display text-[12px] truncate leading-tight w-full">{opt.caption}</span>
+                {opt.detail && <span className="text-[9px] text-text-muted leading-tight">{opt.detail}</span>}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          type="button"
+          disabled={!canSave}
+          onClick={() => picked !== null && onSubmit?.(picked)}
+          className={`${PILL} ${(block.submit.icon && TONES[block.submit.icon]) || PILL_PRIMARY}`}
+        >
+          {pressed === "submit" ? <Spinner /> : SubmitIcon && <SubmitIcon size={13} />}
+          {block.submit.caption}
+        </button>
+        {block.cancel && (
+          <button
+            type="button"
+            disabled={disabled || !onCancel}
+            onClick={onCancel}
+            className={`${PILL} ${(block.cancel.icon && TONES[block.cancel.icon]) || PILL_SECONDARY}`}
+          >
+            {pressed === "cancel" ? <Spinner /> : CancelIcon && <CancelIcon size={13} />}
+            {block.cancel.caption}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Renders the agent's `ui_body` blocks. The caller supplies the chat bubble around them (PlanTab's
 // UiBodyBubble), so text inherits the bubble's typography. A call's reply, or a `replace` action,
 // swaps its scope (the whole body, or one button_group — contract §4.3, §4.6) through onChange.
@@ -71,7 +152,6 @@ function Spinner({ size = 12 }: { size?: number }) {
 export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (update: (prev: UiBody) => UiBody) => void }) {
   const [pending,  setPending]  = useState<Record<string, string>>({});  // scope → the control that was pressed
   const [errors,   setErrors]   = useState<Record<string, string>>({});  // scope → inline error
-  const [selected, setSelected] = useState<Record<string, string>>({});  // choice → chosen option value
   const [open,     setOpen]     = useState<Record<string, boolean>>({}); // collapsed section / group → expanded
   const [shown,    setShown]    = useState<Record<string, boolean>>({}); // nutrition block → shown
   const [sw,       setSw]       = useState<Record<string, boolean>>({}); // switch → state flipped before its reply
@@ -230,51 +310,27 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
       }
 
       if (block.type === "choice") {
-        const choiceKey = key(scope, block.id);
-        const value = selected[choiceKey];
-        const submit = block.submit;
-        const SubmitIcon = submit.icon ? ICONS[submit.icon] : undefined;
-        const submitAction = isAllowedCall(submit.action) ? submit.action : undefined;
+        const submitKey = key(scope, block.id);
+        const cancelKey = key(scope, `${block.id}:cancel`);
+        const submitAction = isAllowedCall(block.submit.action) ? block.submit.action : undefined;
+        // Cancel is a call or a replace and never substitutes {value}. Its scope is the submit's, so in
+        // a list row both swap only that row (§4.3).
+        const cancelAction = block.cancel?.action;
+        const onCancel = isAllowedCall(cancelAction)
+          ? () => runCall(scope, cancelKey, cancelAction)
+          : cancelAction?.kind === "replace"
+            ? () => onChange((prev) => applyBlocks(prev, scope, cancelAction.blocks, prev.version))
+            : undefined;
         return (
-          <div key={k} className="flex flex-col gap-1.5">
-            <div className="text-[12px] font-medium">{block.caption}</div>
-            <div role="radiogroup" aria-label={block.caption} className="flex flex-col gap-1">
-              {block.options.slice(0, 5).map((opt) => {
-                const isSelected = value === opt.value;
-                return (
-                  <label
-                    key={opt.value}
-                    className={`flex items-center gap-2.5 px-3 py-2 border rounded-lg transition-colors ${
-                      isSelected
-                        ? "bg-green-light border-green-border"
-                        : "bg-[#faf9f6] border-[rgba(0,0,0,0.07)] hover:border-green-border"
-                    } ${busy(scope) ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
-                  >
-                    <input
-                      type="radio"
-                      name={choiceKey}
-                      checked={isSelected}
-                      disabled={busy(scope)}
-                      onChange={() => setSelected((s) => ({ ...s, [choiceKey]: opt.value }))}
-                      className="accent-green-primary w-3.5 h-3.5 flex-shrink-0"
-                    />
-                    <span className="flex flex-col items-start min-w-0">
-                      <span className="font-display text-[12px] truncate leading-tight w-full">{opt.caption}</span>
-                      {opt.detail && <span className="text-[9px] text-text-muted leading-tight">{opt.detail}</span>}
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-            <button
-              disabled={busy(scope) || value === undefined || !submitAction}
-              onClick={() => submitAction && runCall(scope, choiceKey, submitAction, value)}
-              className={`${PILL} ${(submit.icon && TONES[submit.icon]) || PILL_PRIMARY} self-end`}
-            >
-              {pending[scope] === choiceKey ? <Spinner /> : SubmitIcon && <SubmitIcon size={13} />}
-              {submit.caption}
-            </button>
-          </div>
+          <ChoiceBlock
+            // Keyed by id and baseline: a form that comes back in the same place with another `selected` is a new form.
+            key={`choice:${block.id}:${block.selected ?? ""}`}
+            block={block}
+            disabled={busy(scope)}
+            pressed={pending[scope] === submitKey ? "submit" : pending[scope] === cancelKey ? "cancel" : null}
+            onSubmit={submitAction && ((value) => runCall(scope, submitKey, submitAction, value))}
+            onCancel={onCancel}
+          />
         );
       }
 
