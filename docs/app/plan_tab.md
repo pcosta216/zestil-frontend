@@ -70,7 +70,7 @@ rendered by `components/UiBodyBlocks.tsx` inside `UiBodyBubble`, one agent bubbl
 cards). Blocks: `text` (body / header / sub_header), `button`, `choice`, `button_group` (optionally
 collapsed to one tappable row) and `nutrition` (hidden until a `toggle` shows it; drawn with
 `components/MacroRings.tsx`, the recipe card's macro rings — values rounded, a missing key gets no
-ring, one row from 250px wide and 3 + 3 below that). Icons are a closed name → lucide map (`ICONS`); an unknown name
+ring, always one row: full 40px from about 430px wide, shrinking in a narrower bubble). Icons are a closed name → lucide map (`ICONS`); an unknown name
 draws none.
 
 Actions: a `call` goes from the browser straight to

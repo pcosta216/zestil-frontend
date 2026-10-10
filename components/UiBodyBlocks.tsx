@@ -231,14 +231,7 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
         return (
           <div key={k} className={`${CARD} px-3 py-2 flex flex-col gap-1.5`}>
             <div className="text-[11px] text-text-muted">{block.caption}</div>
-            {/* Six 40px rings need ~250px for one row; a phone-width bubble has less, so below that
-                they wrap 3 + 3 rather than overflow the bubble. */}
-            <div className="@container">
-              <MacroRings
-                macros={block.macros}
-                className="grid grid-cols-3 justify-items-center gap-y-2 @min-[250px]:flex @min-[250px]:items-center @min-[250px]:justify-between"
-              />
-            </div>
+            <MacroRings macros={block.macros} />
           </div>
         );
       }
