@@ -4,9 +4,12 @@ export type UiCallAction = { kind: "call"; endpoint: string; body: Record<string
 export type UiToggleAction = { kind: "toggle"; target: string };
 // Swaps the action's scope for `blocks`, on the device only (§4.6). `[]` removes the scope.
 export type UiReplaceAction = { kind: "replace"; blocks: UiBlock[] };
+// Puts back what the scope held before the last local `replace`, on the device only (§4.7). Disabled
+// when nothing was kept.
+export type UiRevertAction = { kind: "revert" };
 // `message` is reserved in v1 and an unknown kind lands here too: both render disabled.
 export type UiOtherAction = { kind: "other" };
-export type UiAction = UiCallAction | UiToggleAction | UiReplaceAction | UiOtherAction;
+export type UiAction = UiCallAction | UiToggleAction | UiReplaceAction | UiRevertAction | UiOtherAction;
 
 export type UiButton = {
   id: string;
@@ -63,9 +66,14 @@ export type UiNotice = {
 
 // Frontend-only, never sent by an agent: the blocks that replaced a `button_group` after one of its
 // calls. A call from any control inside it replaces the slot again (§4.3), so it is the scope.
-export type UiSlotBlock = { type: "slot"; id: string; blocks: UiBlock[] };
+//
+// `previous` is what the last local `replace` swapped out of it, for `revert` (§4.7): one level, only
+// the latest swap. It is written by the same state update that does the swap, and a call's reply
+// replaces the slot without it, so a stale row can never come back.
+export type UiSlotBlock = { type: "slot"; id: string; blocks: UiBlock[]; previous?: UiBlock[] };
 
-export type UiBody = { version: number; blocks: UiBlock[] };
+// `previous` is the same thing for a scope that is the whole body (a `replace` on a body-level button).
+export type UiBody = { version: number; blocks: UiBlock[]; previous?: UiBlock[] };
 
 // A response can never point the UI at an arbitrary URL — only these edge functions may be called.
 export const UI_ACTION_ENDPOINTS = ["sides-catalog", "snacks-catalog"];
@@ -83,6 +91,7 @@ function parseAction(raw: unknown): UiAction | undefined {
   if (raw.kind === "toggle" && isStr(raw.target)) return { kind: "toggle", target: raw.target };
   // A replace without a block list is malformed, not "remove everything": it renders disabled.
   if (raw.kind === "replace" && Array.isArray(raw.blocks)) return { kind: "replace", blocks: parseBlocks(raw.blocks) };
+  if (raw.kind === "revert") return { kind: "revert" };
   return { kind: "other" };
 }
 
@@ -230,20 +239,25 @@ export function groupScope(groupId: string): string {
 // Finds the group or slot whose scope this is, in the list or in a section of it (one level), and
 // swaps it for `blocks`. A group becomes a slot, and the panels its toggle buttons showed go with it.
 // No blocks removes the scope outright (§4.6). Returns undefined when the scope isn't in the list.
-function replaceInList(list: UiBlock[], scope: string, blocks: UiBlock[]): UiBlock[] | undefined {
+//
+// `keep` is given for a local `replace` and not for a call's reply: it turns what is being swapped out
+// into the copy stored on the slot for `revert`. For a group, what is swapped out is the group and
+// its panels; for a slot, the slot's blocks.
+function replaceInList(list: UiBlock[], scope: string, blocks: UiBlock[], keep?: (old: UiBlock[]) => UiBlock[]): UiBlock[] | undefined {
   const idx = list.findIndex((b) => (b.type === "button_group" || b.type === "slot") && groupScope(b.id) === scope);
   if (idx !== -1) {
     const target = list[idx];
     if (target.type === "slot") {
       const next = [...list];
-      if (blocks.length) next[idx] = { ...target, blocks };
-      else next.splice(idx, 1);
+      if (!blocks.length) next.splice(idx, 1);
+      else next[idx] = { type: "slot", id: target.id, blocks, ...(keep ? { previous: keep(target.blocks) } : {}) };
       return next;
     }
     if (target.type !== "button_group") return undefined;
     const gone = new Set(toggleTargetsOf(target));
+    const panels = list.filter((b) => b.type === "nutrition" && !!b.id && gone.has(b.id));
     return list.flatMap((b, i): UiBlock[] => {
-      if (i === idx) return blocks.length ? [{ type: "slot", id: target.id, blocks }] : [];
+      if (i === idx) return blocks.length ? [{ type: "slot", id: target.id, blocks, ...(keep ? { previous: keep([target, ...panels]) } : {}) }] : [];
       if (b.type === "nutrition" && b.id && gone.has(b.id)) return [];
       return [b];
     });
@@ -251,7 +265,7 @@ function replaceInList(list: UiBlock[], scope: string, blocks: UiBlock[]): UiBlo
   for (let i = 0; i < list.length; i++) {
     const section = list[i];
     if (section.type !== "section") continue;
-    const inner = replaceInList(section.blocks, scope, blocks);
+    const inner = replaceInList(section.blocks, scope, blocks, keep);
     if (inner) {
       const next = [...list];
       next[i] = { ...section, blocks: inner };
@@ -261,15 +275,47 @@ function replaceInList(list: UiBlock[], scope: string, blocks: UiBlock[]): UiBlo
   return undefined;
 }
 
-// What a call's reply, or a `replace` action, does to its scope (§4.3, §4.6): the whole ui_body, or
-// one `button_group`. The replacement becomes that group's slot, and a call from inside the slot
-// replaces the slot again (Remove → Undo → "Restored" in the same place).
-export function applyBlocks(prev: UiBody, scope: string, blocks: UiBlock[], version = prev.version): UiBody {
-  if (scope === ROOT_SCOPE) return { version, blocks };
-  const next = replaceInList(prev.blocks, scope, blocks);
+function swap(prev: UiBody, scope: string, blocks: UiBlock[], version: number, keep?: (old: UiBlock[]) => UiBlock[]): UiBody {
+  if (scope === ROOT_SCOPE) return { version, blocks, ...(keep ? { previous: keep(prev.blocks) } : {}) };
+  const next = replaceInList(prev.blocks, scope, blocks, keep);
   return next ? { ...prev, blocks: next } : prev;
+}
+
+// What a call's reply does to its scope (§4.3): the whole ui_body, or one `button_group`. The
+// replacement becomes that group's slot, and a call from inside the slot replaces the slot again
+// (Remove → Undo → "Restored" in the same place). It keeps nothing for `revert`: a reply means what
+// was there is stale.
+export function applyBlocks(prev: UiBody, scope: string, blocks: UiBlock[], version = prev.version): UiBody {
+  return swap(prev, scope, blocks, version);
 }
 
 export function applyReply(prev: UiBody, scope: string, reply: UiBody): UiBody {
   return applyBlocks(prev, scope, reply.blocks, reply.version);
+}
+
+// A local `replace` (§4.6): the same swap, but what it swaps out is kept, for `revert` (§4.7). Only the
+// latest swap is kept. `bake` lets the caller fold in what the user could see (an expanded row, a
+// shown panel) that the blocks themselves don't say.
+export function applyReplace(prev: UiBody, scope: string, blocks: UiBlock[], bake: (old: UiBlock[]) => UiBlock[] = (b) => b): UiBody {
+  return swap(prev, scope, blocks, prev.version, bake);
+}
+
+// What a scope has kept for `revert`, if anything.
+export function previousOf(body: UiBody, scope: string): UiBlock[] | undefined {
+  if (scope === ROOT_SCOPE) return body.previous;
+  const find = (list: UiBlock[]): UiBlock[] | undefined => {
+    for (const b of list) {
+      if (b.type === "slot" && groupScope(b.id) === scope) return b.previous;
+      if (b.type === "section") { const inner = find(b.blocks); if (inner) return inner; }
+    }
+    return undefined;
+  };
+  return find(body.blocks);
+}
+
+// `revert` (§4.7): put back what the last local `replace` swapped out, and forget it. A scope that kept
+// nothing is left as it is.
+export function applyRevert(prev: UiBody, scope: string): UiBody {
+  const kept = previousOf(prev, scope);
+  return kept ? applyBlocks(prev, scope, kept) : prev;
 }

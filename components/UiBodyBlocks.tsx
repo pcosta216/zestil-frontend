@@ -6,7 +6,7 @@ import { MacroRings } from "@/components/MacroRings";
 import { MiniMarkdown } from "@/components/MiniMarkdown";
 import { ArrowLeftRight, Ban, Check, ChevronDown, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
 import {
-  ROOT_SCOPE, applyBlocks, findNutrition, groupScope, isAllowedCall, parseUiBody, substituteValue,
+  ROOT_SCOPE, applyBlocks, applyReplace, applyRevert, findNutrition, groupScope, isAllowedCall, parseUiBody, previousOf, substituteValue,
   type UiBlock, type UiBody, type UiButton, type UiCallAction, type UiTone,
 } from "@/lib/ui-body";
 
@@ -145,7 +145,8 @@ function ChoiceBlock({ block, disabled, pressed, onSubmit, onCancel }: {
 
 // Renders the agent's `ui_body` blocks. The caller supplies the chat bubble around them (PlanTab's
 // UiBodyBubble), so text inherits the bubble's typography. A call's reply, or a `replace` action,
-// swaps its scope (the whole body, or one button_group — contract §4.3, §4.6) through onChange.
+// swaps its scope (the whole body, or one button_group — contract §4.3, §4.6) through onChange; a
+// `replace` keeps what it swapped out and `revert` puts it back (§4.7).
 //
 // State is keyed by scope + id, never by the bare id: an endpoint's reply uses fixed ids (`undo`), so
 // two removed snacks each hold their own `undo` (§4.3).
@@ -205,6 +206,20 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
   const isShown = (scope: string, panel: NutritionBlock) =>
     panel.id ? (shown[key(scope, panel.id)] ?? !panel.hidden) : !panel.hidden;
 
+  // What a local `replace` keeps for `revert` (§4.7) is what the user could see, not only the blocks: a
+  // row they had expanded and a macros panel they had opened. That open state belongs to where a block
+  // sat, and the kept copy goes back somewhere else (inside the slot), so it is folded into the copy.
+  const isOpenNow = (container: string, b: { id: string; collapsed?: boolean }) => (b.collapsed ? (open[key(container, b.id)] ?? false) : true);
+  function bake(blocks: UiBlock[], container: string): UiBlock[] {
+    return blocks.map((b): UiBlock => {
+      if (b.type === "button_group") return { ...b, collapsed: !isOpenNow(container, b) };
+      if (b.type === "nutrition") return { ...b, hidden: !isShown(container, b) };
+      if (b.type === "section") return { ...b, collapsed: !isOpenNow(container, b), blocks: bake(b.blocks, container) };
+      if (b.type === "slot") return { ...b, blocks: bake(b.blocks, groupScope(b.id)) };
+      return b;
+    });
+  }
+
   // Local only (§4.5): no call, no pending state, nothing replaced.
   function toggleShown(scope: string, blocks: UiBlock[], target: string) {
     const block = findNutrition(blocks, target);
@@ -258,8 +273,11 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
     let onClick: (() => void) | undefined;
     if (isAllowedCall(action)) onClick = () => runCall(actionScope, control, action);
     else if (action?.kind === "toggle" && findNutrition(blocks, action.target)) onClick = () => toggleShown(scope, blocks, action.target);
-    // Local, like a toggle (§4.6): no call, no pending state. No blocks removes the scope.
-    else if (action?.kind === "replace") onClick = () => onChange((prev) => applyBlocks(prev, actionScope, action.blocks, prev.version));
+    // Local, like a toggle (§4.6): no call, no pending state. No blocks removes the scope. What it swaps
+    // out is kept for `revert`.
+    else if (action?.kind === "replace") onClick = () => onChange((prev) => applyReplace(prev, actionScope, action.blocks, (old) => bake(old, scope)));
+    // Local too (§4.7): puts that back. Nothing kept (the form arrived another way): nothing to do, so disabled.
+    else if (action?.kind === "revert" && previousOf(uiBody, actionScope)) onClick = () => onChange((prev) => applyRevert(prev, actionScope));
     const Icon = btn.icon ? ICONS[btn.icon] : undefined;
     return (
       <button
@@ -319,8 +337,10 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
         const onCancel = isAllowedCall(cancelAction)
           ? () => runCall(scope, cancelKey, cancelAction)
           : cancelAction?.kind === "replace"
-            ? () => onChange((prev) => applyBlocks(prev, scope, cancelAction.blocks, prev.version))
-            : undefined;
+            ? () => onChange((prev) => applyReplace(prev, scope, cancelAction.blocks, (old) => bake(old, scope)))
+            : cancelAction?.kind === "revert" && previousOf(uiBody, scope)
+              ? () => onChange((prev) => applyRevert(prev, scope))
+              : undefined;
         return (
           <ChoiceBlock
             // Keyed by id and baseline: a form that comes back in the same place with another `selected` is a new form.

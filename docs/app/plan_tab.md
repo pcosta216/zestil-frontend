@@ -78,7 +78,7 @@ Blocks:
   nothing is selected. Save is disabled while the pick equals `selected`, so it enables only for a
   different option and disables again if the original is picked back; with no `selected`, any pick
   enables it. `cancel` is a second button on Save's line (always enabled unless a call is in flight):
-  a `call` or a `replace`, never `{value}`-substituted, with the same scope as Save, so in a list
+  a `revert`, a `call` or a `replace`, never `{value}`-substituted, with the same scope as Save, so in a list
   row both replace only that row. Save sends the picked value as an exact string (`"1.5"`). The
   component is keyed by id and `selected`, so a form swapped in place with another baseline remounts.
 - `section`: a header (caption over detail, chevron when `collapsed`) that contains its blocks, one
@@ -118,9 +118,18 @@ Actions:
   user's JWT (allowlist in `UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`).
 - `toggle`: local state, shows or hides a `nutrition` block.
 - `replace`: local, swaps its scope for the given blocks; `[]` removes the scope (the snack list's
-  Continue). No pending state.
+  Continue). No pending state. What it swaps out is **kept** for `revert`: on the slot it creates (or
+  on the body, for a body-level scope), written by the same state update as the swap, one level, only
+  the latest swap. For a group that is the group and its macros panel; for a slot, its blocks.
+- `revert`: local, puts back what the last `replace` kept and forgets it (the snack Edit form's
+  Cancel — no connection, so it also works offline). Disabled when the scope kept nothing (the form
+  arrived another way, e.g. as a call's reply). A call's reply replaces the scope *without* the kept
+  copy, so a stale row can never come back. It is never usable as a choice's submit. What is kept
+  also folds in what the user could see (`bake`): a row they had expanded and a panel they had
+  opened come back as they were, since that open state belongs to where a block sat.
 - A button with no action, an unknown action kind, a non-allowlisted endpoint, a `toggle` whose
-  target is missing, or a `replace` without a block list renders disabled.
+  target is missing, a `replace` without a block list, or a `revert` with nothing to revert renders
+  disabled.
 
 A call's **scope** is the whole body, or just the `button_group` its button sits in (also inside a
 section): only that scope is disabled while the call is in flight (pending is tracked per scope), and
