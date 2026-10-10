@@ -67,26 +67,69 @@ spelled out; it would also hide a `suggestion_pending` reply's Confirm / Keep bu
 `lib/ui-body.ts:parseUiBody` (unknown block types dropped, unknown `text` styles kept as body) and
 rendered by `components/UiBodyBlocks.tsx` inside `UiBodyBubble`, one agent bubble that replaces
 `AgentBubble` for that message (a message with cards gets a bubble of just the blocks below the
-cards). Blocks: `text` (body / header / sub_header), `button`, `choice`, `button_group` (optionally
-collapsed to one tappable row) and `nutrition` (hidden until a `toggle` shows it; drawn with
-`components/MacroRings.tsx`, the recipe card's macro rings — values rounded, a missing key gets no
-ring, always one row: full 40px from about 430px wide, shrinking in a narrower bubble). Icons are a closed name → lucide map (`ICONS`); an unknown name
-draws none.
+cards).
 
-Actions: a `call` goes from the browser straight to
-`<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the user's JWT (allowlist in
-`UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`); a `toggle` is local state only. A button
-with no action, an unknown action kind, a non-allowlisted endpoint or a `toggle` whose target is
-missing renders disabled. A call's **scope** is the whole body, or just the `button_group` its
-button sits in: only that scope is disabled while the call is in flight (pending is tracked per
-scope), and the reply (`ui_body`, or its `message` as a `text` block) replaces only that scope.
-A replaced group becomes a frontend-only `slot` block; a call from inside it replaces the slot
-again (Remove → Undo → "Restored" in the same place). Local state (selected option, expanded group,
-shown panel, pending, error) is keyed by scope + id, never the bare id, because reply ids like
-`undo` repeat. Replies are applied through an updater (`onChange(prev => …)`), so two groups
-resolving together don't overwrite each other, and without scrolling the chat. The model's own
-sentence is hidden only when a *body* `text` block says it already — a list's header lines don't
-count, so its category counts stay visible.
+Blocks:
+- `text` (body / header / sub_header), `button` and `choice`.
+- `section`: a header (caption over detail, chevron when `collapsed`) that contains its blocks, one
+  level deep. A section with no blocks left is **not drawn** (the contract leaves that to us). A hairline
+  under each header separates it from what follows, so a closed section that ends the list has none;
+  an emptied section after it and a trailing `notice` (a footer, not more list) don't count. An open
+  one keeps its line, which sits under the header.
+- `button_group`, optionally collapsed to one tappable row. Its buttons share one row as equal-width
+  cells, icon over label, because four labelled pills don't fit a phone-width bubble. A button with
+  `state` is a **switch** (track and knob, `role="switch"`) instead of a cell with an icon.
+- `nutrition`, hidden until a `toggle` shows it; drawn with `components/MacroRings.tsx`, the recipe
+  card's macro rings (values rounded, a missing key gets no ring, always one row: full 40px from
+  about 430px wide, shrinking in a narrower bubble). A `nutrition` block that a group in the same list
+  toggles is drawn **inside that group's card**, under a divider below the buttons, and only while
+  the group is open; one nothing toggles keeps a card of its own.
+- `notice`: a note or warning behind its icon. Collapsed (the default) it is **only the icon** — bare
+  and tone-coloured, not a chip; the padding around the glyph is the tap target, and a negative
+  margin keeps the glyph in line with the text above. It is named for screen readers by its `title`
+  (or `caption`); tapping opens a panel with the bold `title` and the `caption`, with the same bare
+  icon in its header. The **tone** (`info` / `warning` / `forbidden` / `critical`; unknown is `info`) sets
+  the colour of the icon and panel, not the icon's name: warning is amber, critical red, and info and
+  forbidden are neutral because §3.1.7 leaves them "open". An unknown or missing icon falls back to
+  the tone's (`info`, `alert`, `block`, `alert`), so a notice never shows nothing, and a notice with
+  any text is never dropped. Open/closed is local state keyed by what the notice says (it has no
+  `id`), so it survives the list changing around it. `format: "markdown"` goes through
+  `lib/mini-markdown.ts` + `components/MiniMarkdown.tsx`, which understand only `**bold**`,
+  `*italic*`, `- ` bullets, line breaks and blank-line paragraphs; everything else, including links,
+  headings, code and HTML, stays as the literal characters, and all text is escaped by React.
+
+Icons are a closed name → lucide map (`ICONS`); an unknown name draws none. The icon also sets the
+button's colour (`TONES`), as on the recipe card's actions, whatever the button's `style`: `trash`
+red, `edit` and `info` blue, `toggle` grey, `alert` yellow; the rest (`undo`, `check`, `plus`, `block`…)
+keep the green style. (§3.2 of
+the contract lists `info` as "open"; it is blue because that was asked for in chat.)
+
+Actions:
+- `call`: from the browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the
+  user's JWT (allowlist in `UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`).
+- `toggle`: local state, shows or hides a `nutrition` block.
+- `replace`: local, swaps its scope for the given blocks; `[]` removes the scope (the snack list's
+  Continue). No pending state.
+- A button with no action, an unknown action kind, a non-allowlisted endpoint, a `toggle` whose
+  target is missing, or a `replace` without a block list renders disabled.
+
+A call's **scope** is the whole body, or just the `button_group` its button sits in (also inside a
+section): only that scope is disabled while the call is in flight (pending is tracked per scope), and
+the reply (`ui_body`, or its `message` as a `text` block) replaces only that scope. A replaced group
+becomes a frontend-only `slot` block; a call from inside it replaces the slot again (Remove → Undo →
+the row again, in the same place). A slot made of groups has no card of its own, since they already
+are cards. An open group's caption wraps (it can be a sentence); a collapsed row's is one line.
+Local state (selected option, expanded section or group, shown panel, switch, pending, error) is
+keyed by scope + id, never the bare id, because reply ids like `undo` repeat. Replies are applied
+through an updater (`onChange(prev => …)`), so two groups resolving together don't overwrite each
+other, and without scrolling the chat.
+
+A switch flips at once, then calls with `"{value}"` replaced by its new state as a JSON boolean. Only
+a reply with a `ui_body` and without `ok: false` counts; anything else (or a network error) flips it
+back and shows the server's `message`, or a generic one, under the group.
+
+The model's own sentence is hidden only when a *body* `text` block says it already — a list's header
+lines don't count, so its category counts stay visible.
 
 **Day/week grid** (`DayGrids`, `PlanTab.tsx:304-372`): groups `MealCard[]` by weekday, sorts
 within a day by the account's `meal_slots` order then `main → side → dessert` (`ROLE_ORDER`), and

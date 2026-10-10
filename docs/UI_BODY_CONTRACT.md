@@ -1,7 +1,7 @@
 # UI body contract — `ui_body` and `response_type: "feedback"`
 
 **Status:** v1 built 2026-10-08 — migration `2026100801_restore_user_side.sql` **not yet applied**; `planner-agent` and `sides-catalog` **deploy pending**; frontend renderer not built. Users: the planner's `remove_from_my_sides` and (2026-10-08, migration `2026100802` not yet applied) `adjust_my_side`.
-**2026-10-10:** the interactive snack list (§5.6): `button_group` gains `detail` and `collapsed`, a group's call reply replaces only that group (§4.3), and the Edit button is a placeholder. The producer in `list_my_snacks` is built; `planner-agent` deploy and migration `2026101001` are pending, and both should wait for the frontend renderer.
+**2026-10-10:** the interactive snack list (§5.6). New: the `section` block (§3.1.6), `button_group`'s `detail` and `collapsed`, switch buttons (`state`), the local `replace` action (§4.6), and a group's call reply replacing only that group (§4.3). The Edit button is a placeholder. Built in `list_my_snacks` and `snacks-catalog`; the deploys of `planner-agent` and `snacks-catalog`, and migration `2026101001`, wait for the frontend renderer.
 **Audience:** whoever builds the agent side (this repo) and whoever builds the renderer (`zestil-frontend`, Plan tab chat).
 
 ---
@@ -64,9 +64,11 @@ The path is frontend → `router-agent` → `planner-agent` → back. The router
 
 **Unknown block types are skipped, not errors.** The agent side can add a type before the frontend renders it without breaking anything.
 
+**Wording** (owner, 2026-10-10). Every caption the user reads calls the app **Zestil**, never "app": "Zestil · 30 g", "Zestil default", "restored Zestil's default". The planner's instructions carry the same rule for the model's own text (`2026101002`).
+
 ### 3.1 Block types (v1)
 
-Five types: `text`, `button`, `choice`, `button_group` and `nutrition`.
+Seven types: `text`, `button`, `choice`, `button_group`, `nutrition`, `section` and `notice`.
 
 #### 3.1.1 `text`
 
@@ -127,7 +129,7 @@ Pick one option from a list, then submit. This is the radio-button list.
   "caption": "Which one should I remove?",
   "select": "single",
   "options": [
-    { "caption": "Roasted carrots",  "detail": "vegetable · app default", "value": "0b5e…" },
+    { "caption": "Roasted carrots",  "detail": "vegetable · Zestil default", "value": "0b5e…" },
     { "caption": "Carrot salad",     "detail": "vegetable · your side",   "value": "7c21…" }
   ],
   "submit": {
@@ -178,7 +180,7 @@ With the two optional fields, as the snack list uses them (§5.6):
   "type": "button_group",
   "id": "snack_1fc06978",
   "caption": "Almonds",
-  "detail": "App · 30 g · Auto on",
+  "detail": "Zestil · 30 g",
   "collapsed": true,
   "buttons": [ ... ]
 }
@@ -191,7 +193,14 @@ With the two optional fields, as the snack list uses them (§5.6):
 | `caption` | string | The label or title above the buttons. Plain text, no markdown. |
 | `detail` | string | Optional. A second, lighter line under `caption`, as on `choice` options. Plain text. |
 | `collapsed` | boolean | Optional. Default `false`. When `true`, only `caption` and `detail` are shown, as one row the user can tap; tapping it shows the buttons, and tapping again hides them. |
-| `buttons` | array of `{id, caption, style?, icon?, action?}` | 1–4 buttons, shown in array order. Each one has the same fields as a `button` block, without `type`. Each `id` must be unique within the whole `ui_body`, not just within the group. No more than one `"primary"`. **`action` may be absent** in a group: the button is a placeholder for an action not connected yet, and renders disabled. |
+| `buttons` | array of `{id, caption, style?, icon?, state?, action?}` | 1–4 buttons, shown in array order. Each one has the same fields as a `button` block, without `type`. Each `id` must be unique within the whole `ui_body`, not just within the group. No more than one `"primary"`. **`action` may be absent** in a group: the button is a placeholder for an action not connected yet, and renders disabled. |
+| `buttons[].state` | boolean | Optional, groups only. When present, the button renders as a **switch** labelled `caption`, showing `state`. See "Switches" below. |
+
+**Switches** (owner, 2026-10-10). A tap flips the switch **at once** (optimistic) and runs its `call` with `"{value}"` replaced by the new state, as a boolean (§4.2). While the call is in flight, the group's other controls and the switch itself are disabled. Then:
+- **Reply with `ui_body`:** it replaces the group as any group reply does (§4.3). For the snack list it is the same row again, so nothing visibly moves. It can differ in ids, because changing an app snack makes the user's own copy, and the new row points at it.
+- **Reply without `ui_body`, `ok: false`, or a network error:** the switch flips back, and the short inline error shows under the group.
+
+A switch has no Undo: flipping it back is the undo.
 
 **Collapsed groups.** Expanding and collapsing is on-screen state only, like a `toggle` (§4.5): no call, nothing saved. Collapsing a group also hides any block its `toggle` buttons had shown, so an open nutrition panel doesn't stay behind on its own.
 
@@ -232,24 +241,95 @@ Macros for an amount that the `caption` states. That can be what an action would
 
 The first producer is `list_my_snacks` (§5.6): one hidden block per snack, toggled by its Info button. Adding the type doesn't raise `version` (§3).
 
+#### 3.1.6 `section`
+
+A collapsible header that **contains** its blocks: one category of a list, for example.
+
+```json
+{
+  "type": "section",
+  "id": "cat_fruit",
+  "caption": "Fruit",
+  "detail": "3 snacks",
+  "collapsed": true,
+  "blocks": [ <block>, <block>, ... ]
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | `"section"` | |
+| `id` | string | Unique within this `ui_body`. |
+| `caption` | string | Rendered as a header. Plain text. |
+| `detail` | string | Optional. Rendered as a sub-header under `caption`. |
+| `collapsed` | boolean | Optional. Default `false`. When `true`, only the header shows; tapping it shows the blocks, and tapping again hides them. On-screen state only. |
+| `blocks` | array | The section's content, rendered in order when it's open. Any block type **except `section`**: one level only. |
+
+- **A container, not a flag on a header.** With a flag, a header would implicitly own every block up to the next header. Once a turn joins the list with another tool's blocks, those blocks would land inside the last category. Here the membership is explicit.
+- **Ids** inside a section are unique across the whole body, like any other. A `toggle` may target a block in the same section.
+- **Calls inside a section** keep their own scope (§4.3): a group's reply replaces that group inside the section, and the rest stays as it was.
+- An **empty** section (`blocks: []`, for instance after every row was removed with Continue) is the frontend's call: hide it, or keep the header.
+
+#### 3.1.7 `notice`
+
+A note or a warning about something nearby, behind a short visible handle: its icon. Collapsed (the default), the notice is **only the icon**. Tapping it shows the `title` and `caption`, and tapping again hides them.
+
+```json
+{
+  "type": "notice",
+  "tone": "warning",
+  "icon": "alert",
+  "title": "Above the usual range",
+  "caption": "3 servings is more than a side usually is. It still applies to future plans."
+}
+```
+
+| Field | Type | Notes |
+|---|---|---|
+| `type` | `"notice"` | |
+| `tone` | `"info"` \| `"warning"` \| `"forbidden"` \| `"critical"` | How serious the message is. Sets the notice's color (below). Default `"info"`. An unknown `tone` renders as `"info"`. |
+| `icon` | string | **Required, never `null`.** A name from §3.2. It's the user's handle on the notice, so a notice always shows one. If the frontend doesn't know the name, it uses the tone's fallback icon (below) instead of showing nothing. |
+| `title` | string | Optional. A short bold line, shown only when the notice is open. Plain text. |
+| `caption` | string | The message, shown only when the notice is open. Plain text, unless `format` is `"markdown"`. |
+| `format` | `"plain"` \| `"markdown"` | Optional. Default `"plain"`. `"markdown"` allows a small subset in `caption` (below). `title` is always plain. |
+| `collapsed` | boolean | Optional. **Default `true`.** `false` sends the notice already open. Opening and closing is on-screen state only, like a `toggle` (§4.5): no call, nothing saved. |
+
+| `tone` | Meaning | Color | Fallback icon |
+|---|---|---|---|
+| `info` | Useful to know; nothing is wrong | open | `info` |
+| `warning` | Worth checking, but it went through | yellow | `alert` |
+| `forbidden` | Not allowed: a rule blocked it, e.g. an excluded food | open | `block` |
+| `critical` | Serious: the user should act on it | red | `alert` |
+
+- **Color comes from `tone`, not from the icon.** A notice is drawn in its tone's color, icon included, so an `info` icon on a `warning` notice is yellow. Elsewhere an icon keeps its own color (§3.2). As in §3.2, **open** means not decided yet, and the frontend uses its default color until this table gives one.
+- **Accessible label.** Collapsed, the notice is only an icon, so the frontend gives it the `title` as its accessible label (or the `caption` when there's no `title`).
+- **Never skipped.** A renderer skips an unknown block type (§3), and a warning lost that way does real harm. So the agent side doesn't send `notice` until the frontend renders it, the same "made on both sides" rule as icon names (§3.2).
+- **Placement.** Anywhere, as any block, including inside a `section`. Put it next to whatever it's about.
+- **The markdown subset** (owner, 2026-10-10), for longer notes such as a list's help: `**bold**`, `*italic*`, lines starting with `- ` as a bullet list, single line breaks, and a blank line between paragraphs. **Nothing else:** no links, images, headings, HTML, code or tables. The frontend renders it with HTML escaped first, so a stray `<` shows as a character and never as markup. Anything outside the subset renders as its literal characters. The agent side keeps to the subset: the dashboard refuses to save text that goes outside it (`tbl_ui_help`, §5.6).
+
+The first producer is the snack list's help note (§5.6): `tone: "info"`, the `info` icon, `format: "markdown"`, built 2026-10-10. Next planned: `adjust_my_side`'s out-of-range warning (§5.4), which today is a plain second `text` block. Adding the type doesn't raise `version` (§3).
+
 ### 3.2 Icons
 
 An icon is a **name**, never a URL or an image. The frontend maps each name to its own artwork, so the set is closed, like the block types (§3.1) and the endpoint allowlist (§4.1). An unknown name renders with no icon, not as an error.
 
-| Name | Meaning | Used by (v1) |
-|---|---|---|
-| `trash` | Remove or delete | `choice` submit "Remove" (§5.2); snack list Remove (§5.6) |
-| `edit` | Change an amount or a setting | `choice` submit "Change" (§5.4); snack list Edit (§5.6) |
-| `toggle` | Switch something on or off | `choice` submit "Switch on" / "Switch off" (§5.5); snack list Auto (§5.6) |
-| `undo` | Reverse the last change | Not used yet |
-| `info` | Show more detail, e.g. a hidden `nutrition` block | Snack list Info (§5.6) |
-| `check` | Confirm, done | Not used yet |
-| `cross` | Cancel, dismiss, no | Not used yet |
-| `alert` | Warning: something needs attention | Not used yet |
-| `plus` | Add | Not used yet |
-| `swap` | Replace one item with another | Not used yet |
+| Name | Meaning | Color | Used by (v1) |
+|---|---|---|---|
+| `trash` | Remove or delete | red | `choice` submit "Remove" (§5.2); snack list Remove (§5.6) |
+| `edit` | Change an amount or a setting | blue | `choice` submit "Change" (§5.4); snack list Edit (§5.6) |
+| `toggle` | Switch something on or off | grey | `choice` submit "Switch on" / "Switch off" (§5.5). A switch (`state`) needs no icon. |
+| `undo` | Reverse the last change | open | Snack list Undo after Remove (§5.6) |
+| `info` | Show more detail, e.g. a hidden `nutrition` block | open | Snack list Info, and the list's help note (§5.6) |
+| `check` | Confirm, done | open | Snack list Continue (§5.6) |
+| `cross` | Cancel, dismiss, no | open | Not used yet |
+| `alert` | Warning: something needs attention | yellow | Not used yet |
+| `plus` | Add | open | Snack list Restore, in the "Removed" section (§5.6) |
+| `swap` | Replace one item with another | open | Not used yet |
+| `block` | Not allowed | open | `notice` fallback for `tone: "forbidden"` (§3.1.7) |
 
-An icon goes on any button: `button`, a button in a `button_group`, or a `choice`'s `submit`. Absent or `null` means no icon.
+**Colors** (owner, 2026-10-10) belong to the icon name, like its artwork: the payload never carries a color. The frontend maps each color to a shade from its own theme, so it works in light and dark mode. **Open** means not decided yet: the frontend uses its default icon color until this table gives one.
+
+An icon goes on any button: `button`, a button in a `button_group`, or a `choice`'s `submit`. Absent or `null` means no icon. On a `notice` (§3.1.7) the icon is required, and its color comes from the notice's `tone`.
 
 Adding a name is a deliberate change to this contract, made on both sides. The agent side doesn't use a new name until the frontend has artwork for it.
 
@@ -271,7 +351,7 @@ The UI sends `POST {SUPABASE_URL}/functions/v1/{endpoint}`, with `Authorization:
 
 ### 4.2 `{value}` substitution
 
-In a `choice`'s `submit.action.body`, any string that is **exactly** `"{value}"` is replaced with the selected option's `value`. This is the only templating that exists. No other placeholders, and no substitution inside longer strings.
+In a `choice`'s `submit.action.body`, any string that is **exactly** `"{value}"` is replaced with the selected option's `value`. In a switch's `action.body` (§3.1.4), it is replaced with the switch's new state, as a JSON boolean (`true`/`false`), not a string. This is the only templating that exists. No other placeholders, and no substitution inside longer strings.
 
 ### 4.3 What a call returns, and what the UI does with it
 
@@ -311,6 +391,18 @@ The frontend shows the block whose `id` is `target` if it's hidden, and hides it
 - **Not saved.** Whether a block is shown is on-screen state only. Like the rest of `ui_body`, it's gone after a reload (§4.4).
 - **Not in a `choice` submit.** A `choice`'s `submit.action` is always a `call`.
 
+### 4.6 `kind: "replace"`: swap the scope for given blocks, on the device only
+
+```json
+{ "kind": "replace", "blocks": [] }
+```
+
+The frontend replaces the action's **scope** (§4.1, §4.3: the group or slot the button sits in) with `blocks`, with no network call. `blocks: []` removes the scope entirely. The snack list's **Continue** uses it after a removal: the row leaves the list.
+
+- Like `toggle`, it's local: no pending state, no reply, nothing saved.
+- The given blocks follow every rule of a call's reply blocks: they render in the scope's place and form its slot.
+- Only in a `button` or a group button, never in a `choice` submit.
+
 ## 5. First user: `remove_from_my_sides`
 
 ### 5.1 When the planner returns `response_type: "feedback"`
@@ -332,7 +424,7 @@ The handler result comes from `remove_user_side()` (`ok`, `action`, `display_nam
 | `ok`, `action: "deactivated"` (the user's own side) | `feedback` | `text` "Removed "{name}" from your sides." + `button` Undo → `restore` |
 | `ok`, `action: "excluded"` (an app default, now hidden for this user) | `feedback` | `text` "Removed "{name}" from your sides." + `button` Undo → `restore` |
 | `ok`, `action: "already_removed"` | `feedback` | `text` ""{name}" was already removed." No Undo, because nothing changed. |
-| `ambiguous` with `candidates` (2–5 matches) | `feedback` | `choice` "Which one should I remove?" with options from `candidates` (`caption` = `display_name`, `detail` = "{category} · your side \| app default", `value` = `side_uuid`) and submit "Remove" → `remove` with `side_uuid: "{value}"` |
+| `ambiguous` with `candidates` (2–5 matches) | `feedback` | `choice` "Which one should I remove?" with options from `candidates` (`caption` = `display_name`, `detail` = "{category} · your side \| Zestil default", `value` = `side_uuid`) and submit "Remove" → `remove` with `side_uuid: "{value}"` |
 | No match (`ok: false`, no candidates) | `feedback` | `text` "No side named "{name}" is in your list." |
 | Error (RPC failure, refused account) | `info` | **none**. The model's text explains, as today. |
 
@@ -373,7 +465,7 @@ Units only: servings for a recipe side, units (slices, pieces) for an as-sold it
 
 **`sides-catalog` calls.**
 - `{ "action": "adjust", "side_uuid": "…", "amount": 2, "unit_label": "slice" }` → `adjust_user_side()`, and the reply carries the same blocks.
-- `{ "action": "undo_adjust", "side_uuid": "…", "undo": { … } }` → `undo_adjust_user_side()`. `undo` is opaque to the UI: it's copied from the button's payload. The reply is one `text` block ("Put back …" / "Removed your copy of … and restored the app's default"), with no Undo of the Undo. If the default has changed since, the reply is `ok: false` with "That side has changed since, so there's nothing to undo." and no `ui_body`.
+- `{ "action": "undo_adjust", "side_uuid": "…", "undo": { … } }` → `undo_adjust_user_side()`. `undo` is opaque to the UI: it's copied from the button's payload. The reply is one `text` block ("Put back …" / "Removed your copy of … and restored Zestil's default"), with no Undo of the Undo. If the default has changed since, the reply is `ok: false` with "That side has changed since, so there's nothing to undo." and no `ui_body`.
 
 ### 5.5 Snacks: the same blocks on `snacks-catalog`, plus the auto-select switch
 
@@ -392,42 +484,78 @@ Remove, restore, adjust and their Undos behave exactly as §5.1–5.4. The snack
 | set off | `text` "{name} won't be picked automatically any more. You can still add it by hand." + `button` Undo → `undo_set_auto` |
 | unchanged | `text` "{name} is already picked automatically." / "…is already left out of automatic picks." (no Undo) |
 | several matches | `choice` "Which one do you mean?", submit "Switch on" / "Switch off" → `set_auto` with `snack_uuid: "{value}"` and the same `auto` |
-| `undo_set_auto` reply | one `text`: "Put back the previous setting for {name}." or, for a copy, "Removed your copy of {name} and restored the app's default." |
+| `undo_set_auto` reply | one `text`: "Put back the previous setting for {name}." or, for a copy, "Removed your copy of {name} and restored Zestil's default." |
 
 ### 5.6 `list_my_snacks`: the interactive snack list
 
-**Status:** owner, 2026-10-10. The producer is built (`snackListBlocks` in `_shared/ui-body.ts`, called by `list_my_snacks`); `planner-agent` deploy and migration `2026101001` are pending, until the frontend renders it. The Edit button is a placeholder until its action is designed.
+**Status:** owner, 2026-10-10. Built: `snackListBlocks` / `snackRowBlocks` / `removeSnackListBlocks` in `_shared/ui-body.ts`, called by `list_my_snacks` (planner) and by `snacks-catalog` for its `view: "list"` replies. Deploys of `planner-agent` and `snacks-catalog`, and migration `2026101001`, are pending until the frontend renders it. The Edit button is a placeholder until its action is designed.
 
-"What snacks do I have" returns the list as blocks, on `response_type: "feedback"` (§2). Blocks are in category order (`tbl_snack_categories.display_order`), then alphabetical inside each category, the same order as the tool result. With a cateAgory filter there is only that category.
+"What snacks do I have" returns the list as blocks, on `response_type: "feedback"` (§2). Categories come in `tbl_snack_categories.display_order`, and snacks alphabetically inside each, the same order as the tool result.
 
-**Per category:**
+**Per category: one `section`** (§3.1.6):
+- `id` `cat_{category key}`, `caption` the label ("Nuts & seeds");
+- `detail` the count: "2 snacks". No serving size: the category's default rarely matches its snacks (owner, 2026-10-10);
+- `collapsed: true` when the list has several categories, `false` when it has one (the user asked for one category).
 
-| Block | Content |
-|---|---|
-| `text`, `style: "header"` | The category label: "Nuts & seeds". |
-| `text`, `style: "sub_header"` | The category's serving size: "Approx. 30 g" (`portion_default_g`). |
-
-**Per snack**, under its category:
+**Per snack: a row**, inside its section:
 
 | Block | Content |
 |---|---|
-| `button_group`, `collapsed: true` | `id` `snack_{first 8 hex of snack_uuid}`, `caption` the snack's name, and `detail` "{Yours \| App} · {default amount} · Auto {on \| off}". The default amount is "30 g", "1 unit (50 g)" for a whole item, or "1 serving" for a recipe snack. |
+| `button_group`, `collapsed: true` | `id` `snack_{first 8 hex of snack_uuid}`, `caption` the snack's name, `detail` "{Yours \| Zestil} · {default amount}". The default amount is "30 g", "1 unit (50 g)" for a whole item, or "1 serving" for a recipe snack. |
 | `nutrition`, `hidden: true` | `id` `snack_{8}_nutrition`, the macros from `tbl_snacks.macros`, and a `caption` such as "Per 30 g", "Per unit (approx. 50 g)", "Per 2 units (100 g)" or "Per serving". For an ingredient the macros are at the default amount; for a recipe they're per single serving. A snack with no macros gets no block, and its Info button is a placeholder. |
 
-**The group's buttons**, in this order:
+**The row's buttons**, in this order. Every call carries `"view": "list"`, which tells `snacks-catalog` to answer with the list's replies below instead of the chat replies of §5.5.
 
-| `id` | Caption | Icon | Action |
+| `id` | Caption | Renders as | Action |
 |---|---|---|---|
-| `snack_{8}_remove` | Remove | `trash` | `call` `snacks-catalog` `{ "action": "remove", "snack_uuid": "…" }`. The reply is "Removed X" + Undo (§5.5), in the group's slot. |
-| `snack_{8}_info` | Info | `info` | `toggle` → `snack_{8}_nutrition` |
-| `snack_{8}_edit` | Edit | `edit` | **None yet**: a placeholder, rendered disabled (§3.1.4). |
-| `snack_{8}_auto` | Auto off / Auto on | `toggle` | `call` `snacks-catalog` `{ "action": "set_auto", "snack_uuid": "…", "auto": false \| true }`. The caption names what the tap **does**; the current state is in `detail`. The reply is the §5.5 set-auto blocks, with Undo, in the group's slot. |
+| `snack_{8}_remove` | Remove | button, `trash` | `call` `{ "action": "remove", "snack_uuid": "…", "view": "list" }` |
+| `snack_{8}_info` | Info | button, `info` | `toggle` → `snack_{8}_nutrition` |
+| `snack_{8}_edit` | Edit | button, `edit`, **disabled** | none yet: a placeholder (§3.1.4) |
+| `snack_{8}_auto` | Auto | **switch**, `state` = picked automatically | `call` `{ "action": "set_auto", "snack_uuid": "…", "auto": "{value}", "view": "list" }` |
 
 "Remove" rather than "Delete": for an app snack it only hides the snack for this user.
 
-**What the model writes.** Because `ui_body` isn't saved (§4.4), the model's `response` still has to make sense on its own after a reload. It gives the counts per category ("27 snacks: 3 fruit, 2 nuts & seeds, …") and names the snacks only when the user asked about one category. Migration `2026101001` puts this in the planner's INTENT 8 line, and the tool's own message says the same.
+**What each tap leads to**, all inside the row's slot (§4.3):
 
-**Size.** With the test user's 27 snacks, the body is 66 blocks (6 headers, 6 sub-headers, 27 groups, 27 nutrition blocks), about 25 KB of JSON.
+| User taps | Reply (`ui_body`) | Next |
+|---|---|---|
+| Remove | One `button_group`: caption "Removed "Almonds" from your snacks.", buttons **Undo** (`undo`, `call` `restore` with `view: "list"`) and **Continue** (`check`, `replace` with `[]`, §4.6) | Continue: the row leaves the list. Undo: see the next line. |
+| Undo | The **row itself** again, open (`collapsed: false`), rebuilt from the database | The user carries on with the row, so it has no Continue. |
+| Undo, but the snack can't come back (e.g. withdrawn app-wide) | One group: the reason as its caption, and Continue | Continue: the row leaves the list. |
+| Auto switch | The **row itself**, open, with the new state. If the snack was the app's, it's now the user's copy: `detail` says "Yours" and every button points at the copy | Nothing visibly moves (§3.1.4, "Switches"). |
+| Remove "already removed" | The sentence and Continue only | |
+
+There is no Undo of the switch: flipping it back is the undo. When the switch made a copy of a Zestil snack, flipping back leaves the user with their own copy, set the same as Zestil's. That's harmless; the only effect is that later changes Zestil makes to that snack don't reach this user.
+
+**The "Removed" section** (owner, 2026-10-10). The last section of the full list, shown only when there is something in it, holds what the user removed, so it can come back. It isn't added to a list filtered to one category.
+- `section` `id` `removed_snacks`, caption "Removed", `detail` the count ("8 snacks"), always `collapsed: true`. It doesn't count toward the fixed reply line.
+- One row per removed snack, alphabetical: a `button_group` `removed_{8 hex}`, `collapsed: false` (its one button is the point). Its `caption` is the name and its `detail` is "{category} · {Yours \| Zestil}". The single button is **Restore** (`plus`), a `call` `{ "action": "restore", "snack_uuid": "…", "view": "removed" }`.
+- **What's listed:** Zestil snacks this user hid, and the user's own inactive snacks, but only foods that nothing visible already covers, with one row per food and the user's own winning. Changing a Zestil snack makes a copy and hides the original, and undoing that change deactivates the copy. Neither was a removal by the user, and both foods stay visible in the list, so neither shows here.
+
+| User taps | Reply (`ui_body`) | Next |
+|---|---|---|
+| Restore | One group: "Restored "Almonds" to your snacks.", with **Undo** (`call` `remove` with `view: "removed"`) and **Continue** (`replace` with `[]`) | Continue: the row leaves the section, and the snack shows in its category the next time the list opens. It isn't moved live across sections. |
+| Undo (after Restore) | The **removed row** again, with Restore | |
+| Restore, but it's already back | "…is already in your snacks." with Continue | |
+| Restore refused (e.g. withdrawn app-wide) | The reason with Continue | Continue: the row leaves the section. |
+
+**The help note** (owner, 2026-10-10). The very last block, after the "Removed" section and outside every section, is a `notice` (§3.1.7): `tone: "info"`, `icon: "info"`, `format: "markdown"`, collapsed. It's a short "how this list works", and its text comes from `tbl_ui_help` row `snack_list` (migration `2026101003`), editable on the dashboard under Tables → UI help, with a live preview. A missing or inactive row sends no notice, and a note is never sent on its own without a list. It describes only what works today, so it says nothing about Edit until Edit is connected.
+
+```json
+{ "type": "notice", "tone": "info", "icon": "info", "format": "markdown",
+  "title": "How this list works",
+  "caption": "Your snacks are grouped by **category**. Tap a category to open it, and a snack to see what you can do with it.\n\n- **Yours / Zestil**: whether you added the snack or it comes with Zestil.\n- **Auto**: when on, Zestil may add this snack to your day by itself to close a macro gap. When off, it's only added when you ask for it.\n- **Info**: the snack's nutrition for the amount shown.\n- **Remove**: takes the snack off your list (a Zestil snack is only hidden for you). You'll find it under *Removed*, where **Restore** brings it back." }
+```
+
+**The reply line is fixed** (owner, 2026-10-10). For "what snacks do I have", `response` is a line built by code, not by the model, so its format never drifts:
+- "You have 27 snack options across 6 categories:" for the whole list;
+- "You have 2 snack options in Treats:" for one category.
+
+There are no counts per category: the sections show them. `list_my_snacks` returns the line as `fixed_response`, and the planner uses it as `response` when every tool the model called in the turn returned one, and the blocks are attached. A mixed turn ("list my snacks and plan tomorrow") keeps the model's text. The frontend needs nothing special: it's the ordinary `response`. After a reload (§4.4) only this line is left.
+
+"How are my snacks organized" calls the same tool with `explain: true`. Then there's no fixed line: the model writes the explanation above the same cards, without listing what they show. Migration `2026101002` puts both rules in the planner's INTENT 8 lines.
+
+**Size.** With the test user's 27 snacks: 6 sections holding 27 rows and 27 nutrition blocks, about 26 KB of JSON.
 
 **Example**, trimmed to one category and one snack:
 
@@ -435,42 +563,68 @@ Remove, restore, adjust and their Undos behave exactly as §5.1–5.4. The snack
 {
   "version": 1,
   "blocks": [
-    { "type": "text", "style": "header",     "caption": "Nuts & seeds" },
-    { "type": "text", "style": "sub_header", "caption": "Approx. 30 g" },
     {
-      "type": "button_group",
-      "id": "snack_1fc06978",
-      "caption": "Almonds",
-      "detail": "App · 30 g · Auto on",
+      "type": "section",
+      "id": "cat_nuts_seeds",
+      "caption": "Nuts & seeds",
+      "detail": "2 snacks",
       "collapsed": true,
-      "buttons": [
-        { "id": "snack_1fc06978_remove", "caption": "Remove", "icon": "trash",
-          "action": { "kind": "call", "endpoint": "snacks-catalog",
-                      "body": { "action": "remove", "snack_uuid": "1fc06978-94ec-4b70-aba8-feb56ab0150f" } } },
-        { "id": "snack_1fc06978_info", "caption": "Info", "icon": "info",
-          "action": { "kind": "toggle", "target": "snack_1fc06978_nutrition" } },
-        { "id": "snack_1fc06978_edit", "caption": "Edit", "icon": "edit" },
-        { "id": "snack_1fc06978_auto", "caption": "Auto off", "icon": "toggle",
-          "action": { "kind": "call", "endpoint": "snacks-catalog",
-                      "body": { "action": "set_auto", "snack_uuid": "1fc06978-94ec-4b70-aba8-feb56ab0150f", "auto": false } } }
+      "blocks": [
+        {
+          "type": "button_group",
+          "id": "snack_1fc06978",
+          "caption": "Almonds",
+          "detail": "Zestil · 30 g",
+          "collapsed": true,
+          "buttons": [
+            { "id": "snack_1fc06978_remove", "caption": "Remove", "icon": "trash",
+              "action": { "kind": "call", "endpoint": "snacks-catalog",
+                          "body": { "action": "remove", "snack_uuid": "1fc06978-94ec-4b70-aba8-feb56ab0150f", "view": "list" } } },
+            { "id": "snack_1fc06978_info", "caption": "Info", "icon": "info",
+              "action": { "kind": "toggle", "target": "snack_1fc06978_nutrition" } },
+            { "id": "snack_1fc06978_edit", "caption": "Edit", "icon": "edit" },
+            { "id": "snack_1fc06978_auto", "caption": "Auto", "state": true,
+              "action": { "kind": "call", "endpoint": "snacks-catalog",
+                          "body": { "action": "set_auto", "snack_uuid": "1fc06978-94ec-4b70-aba8-feb56ab0150f", "auto": "{value}", "view": "list" } } }
+          ]
+        },
+        {
+          "type": "nutrition",
+          "id": "snack_1fc06978_nutrition",
+          "caption": "Per 30 g",
+          "hidden": true,
+          "macros": { "kcal": 173.7, "protein": 6.35, "carbs": 6.47, "fat": 14.98, "sugar": 1.31, "sodium": 0.3 }
+        }
       ]
-    },
-    {
-      "type": "nutrition",
-      "id": "snack_1fc06978_nutrition",
-      "caption": "Per 30 g",
-      "hidden": true,
-      "macros": { "kcal": 173.7, "protein": 6.35, "carbs": 6.47, "fat": 14.98, "sugar": 1.31, "sodium": 0.3 }
     }
   ]
 }
 ```
 
+The Remove reply, which replaces the Almonds row:
+
+```json
+{
+  "ok": true,
+  "message": "Removed \"Almonds\" from your snacks.",
+  "ui_body": { "version": 1, "blocks": [
+    { "type": "button_group", "id": "removed", "caption": "Removed \"Almonds\" from your snacks.",
+      "buttons": [
+        { "id": "undo", "caption": "Undo", "icon": "undo",
+          "action": { "kind": "call", "endpoint": "snacks-catalog",
+                      "body": { "action": "restore", "snack_uuid": "1fc06978-94ec-4b70-aba8-feb56ab0150f", "view": "list" } } },
+        { "id": "continue", "caption": "Continue", "icon": "check", "action": { "kind": "replace", "blocks": [] } }
+      ] }
+  ] }
+}
+```
+
 **What the user sees:**
-1. Headers with one tappable row per snack: "Almonds" over "App · 30 g · Auto on".
-2. Tapping the row shows Remove · Info · Edit (disabled) · Auto off.
-3. Info opens the macros under the row.
-4. Remove turns that row into "Removed "Almonds" from your snacks." + Undo. The rest of the list is untouched.
+1. One header per category, closed: "Nuts & seeds" over "2 snacks".
+2. Opening one shows a row per snack: "Almonds" over "Zestil · 30 g".
+3. Tapping a row shows Remove · Info · Edit (disabled) and the Auto switch.
+4. Info opens the macros under the row. The switch flips at once and stays flipped.
+5. Remove turns the row into "Removed "Almonds" from your snacks." with Undo and Continue. Continue removes the row; Undo brings it back.
 
 ## 6. Implementation notes (agent side)
 
@@ -487,4 +641,4 @@ Remove, restore, adjust and their Undos behave exactly as §5.1–5.4. The snack
 2. **`quick_replies` and `suggestion_pending`.** Both are really `ui_body` blocks: a row of `message` buttons, and a Yes/No confirmation. Folding them in later would need `kind: "message"` and a frontend migration, so they stay as they are for now.
 3. **`multi` select** for "remove these three", if it's ever needed.
 4. **The snack list's Edit button** (§5.6). It's a placeholder now. Options: toggle a hidden `choice` of amounts that calls `adjust` (this needs `toggle` to target a `choice`), or the reserved `kind: "message"`.
-5. **`list_my_sides`** gets the same list (§5.6) without the Auto button, once the snack list is proven.
+5. **`list_my_sides`** gets the same list (§5.6) without the Auto switch, and with the same "Removed" section and a help note (`tbl_ui_help` `side_list`, without the Auto line) (owner, 2026-10-10), once the snack list is proven.
