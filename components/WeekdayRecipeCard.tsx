@@ -108,7 +108,7 @@ export function WeekdayRecipeCard({
         { icon: <Info           size={15} />, label: "Info",   fn: onInfo,        variant: "info"    as const },
       ]
     : [
-        { icon: <Gauge          size={15} />, label: "Macros", fn: openMacroPanel, variant: "info"   as const },
+        { icon: <Info          size={15} />, label: "Macros", fn: openMacroPanel, variant: "info"   as const },
         { icon: <CircleEllipsis size={15} />, label: "More",   fn: undefined,     variant: "default" as const },
         { icon: <Trash2         size={15} />, label: "Delete", fn: onDelete,      variant: "danger"  as const },
       ];

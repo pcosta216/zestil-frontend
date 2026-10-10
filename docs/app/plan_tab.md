@@ -100,9 +100,8 @@ Blocks:
 
 Icons are a closed name → lucide map (`ICONS`); an unknown name draws none. The icon also sets the
 button's colour (`TONES`), as on the recipe card's actions, whatever the button's `style`: `trash`
-red, `edit` and `info` blue, `toggle` grey, `alert` yellow; the rest (`undo`, `check`, `plus`, `block`…)
-keep the green style. (§3.2 of
-the contract lists `info` as "open"; it is blue because that was asked for in chat.)
+red, `edit` grey, `info` blue, `alert` yellow (the colour column of §3.2); the rest (`toggle`, `undo`,
+`check`, `cross`, `plus`, `swap`, `block`) are "open" there and keep the green style.
 
 Actions:
 - `call`: from the browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the

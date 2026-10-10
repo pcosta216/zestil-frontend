@@ -29,11 +29,11 @@ const RED = "bg-red-500 border-red-500 text-white enabled:hover:bg-red-600 enabl
 const BLUE = "bg-[#23BCFD] border-[#23BCFD] text-white enabled:hover:bg-[#0ea5d6] enabled:hover:border-[#0ea5d6]";
 const GREY = "bg-gray-400 border-gray-400 text-white enabled:hover:bg-gray-500 enabled:hover:border-gray-500";
 const YELLOW = "bg-[#f9cb16] border-[#f9cb16] text-text-main enabled:hover:bg-[#e6b800] enabled:hover:border-[#e6b800]";
-// The colour follows the icon's meaning, never the payload (contract §3.2): trash red, edit blue,
-// toggle grey, alert yellow. The rest are "open" there and keep the green style. `info` is blue
-// because it was asked for in chat (2026-10-10, as on the recipe card) although §3.2 lists it as open.
-// It replaces the style's green, so a `trash` button is red whether primary or not.
-const TONES: Record<string, string> = { trash: RED, edit: BLUE, info: BLUE, toggle: GREY, alert: YELLOW };
+// The colour follows the icon's meaning, never the payload (contract §3.2): trash red, edit grey,
+// info blue, alert yellow. The rest (toggle, undo, check, cross, plus, swap, block) are "open" there
+// and keep the green style. It replaces the style's green, so a `trash` button is red whether primary
+// or not.
+const TONES: Record<string, string> = { trash: RED, edit: GREY, info: BLUE, alert: YELLOW };
 const CARD = "bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg";
 
 // A notice is drawn in its tone's colour, icon included, whatever the icon is (§3.1.7): the icon is

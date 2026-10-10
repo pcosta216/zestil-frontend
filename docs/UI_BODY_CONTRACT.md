@@ -316,10 +316,10 @@ An icon is a **name**, never a URL or an image. The frontend maps each name to i
 | Name | Meaning | Color | Used by (v1) |
 |---|---|---|---|
 | `trash` | Remove or delete | red | `choice` submit "Remove" (§5.2); snack list Remove (§5.6) |
-| `edit` | Change an amount or a setting | blue | `choice` submit "Change" (§5.4); snack list Edit (§5.6) |
-| `toggle` | Switch something on or off | grey | `choice` submit "Switch on" / "Switch off" (§5.5). A switch (`state`) needs no icon. |
+| `edit` | Change an amount or a setting | grey | `choice` submit "Change" (§5.4); snack list Edit (§5.6) |
+| `toggle` | Switch something on or off | open | `choice` submit "Switch on" / "Switch off" (§5.5). A switch (`state`) needs no icon. |
 | `undo` | Reverse the last change | open | Snack list Undo after Remove (§5.6) |
-| `info` | Show more detail, e.g. a hidden `nutrition` block | open | Snack list Info, and the list's help note (§5.6) |
+| `info` | Show more detail, e.g. a hidden `nutrition` block | blue | Snack list Info, and the list's help note (§5.6) |
 | `check` | Confirm, done | open | Snack list Continue (§5.6) |
 | `cross` | Cancel, dismiss, no | open | Not used yet |
 | `alert` | Warning: something needs attention | yellow | Not used yet |
