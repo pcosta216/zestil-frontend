@@ -5,6 +5,8 @@ import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { Heart } from "@/lib/icons";
 import { WeekdayRecipeCard } from "@/components/WeekdayRecipeCard";
+import { stopSuggestingFor } from "@/lib/stop-suggesting";
+import { IngredientCard } from "@/components/IngredientCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 import { createClient } from "@/lib/supabase/browser";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
@@ -43,9 +45,11 @@ interface MealCard {
   metadata:           Record<string, any>;
   meal_summary?:      { weekday?: string; kcal?: number; protein?: number; carbs?: number; fat?: number; sugar?: number; sodium?: number; [key: string]: unknown };
   recipe_uuid?:       string;
+  // The side_uuid / snack_uuid behind a side or snack entry (tbl_week_plan_entries.source_uuid).
+  catalog_uuid?:      string | null;
 }
 
-type IngredientCard = string;
+type IngredientName = string;
 
 type AgentMessage = {
   id: string;
@@ -53,7 +57,7 @@ type AgentMessage = {
   content: string;
   responseType: ResponseType;
   mealCards?: MealCard[];
-  ingredientCards?: IngredientCard[];
+  ingredientCards?: IngredientName[];
   changedDates?: string[];
   quickReplies?: string[];
   metadata?: Record<string, any>;
@@ -380,14 +384,13 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   kcal={card.macros?.kcal}
                   servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack') && (card.metadata?.side_kind ?? card.metadata?.snack_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
-                  protein={card.macros?.protein}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
-                  hasNotes={!!card.notes}
                   recipeUuid={card.recipe_uuid ?? card.metadata?.recipe_uuid ?? undefined}
                   macros={card.macros}
                   originalMacros={card.original_macros}
                   isOptimised={card.is_optimised}
                   onDelete={() => onDeleteEntry?.(card.entry_id)}
+                  stopSuggesting={stopSuggestingFor(card)}
                 />
               ))
             )}
@@ -398,14 +401,13 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
   );
 }
 
-function IngredientList({ cards, onSend }: { cards: IngredientCard[]; onSend: (text: string) => void }) {
+function IngredientList({ cards, onSend }: { cards: IngredientName[]; onSend: (text: string) => void }) {
   return (
     <div className="flex flex-col gap-1 -mx-2">
       {cards.map((name, i) => (
-        <WeekdayRecipeCard
+        <IngredientCard
           key={`${name}-${i}`}
           title={name}
-          cardVariant="ingredient"
           onAdd={() => onSend(`Add "${name}" to my plan`)}
         />
       ))}

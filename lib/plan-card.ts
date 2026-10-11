@@ -6,12 +6,15 @@
 // (the badge only renders when is_optimised is truthy). Keeping one builder — and one column
 // list, since is_optimised needs adjusted_snapshot and role needs role — makes that drift
 // impossible rather than merely fixed once.
+//
+// source_uuid is what a side or snack entry points at: table_sides.side_uuid or tbl_snacks.snack_uuid.
+// It is how a plan card can ask the catalog to stop suggesting that item.
 
 import { currentQtyG, originalQtyG } from "@/lib/entry-quantity";
 
 export const PLAN_ENTRY_COLUMNS =
   "entry_id, entry_date, meal_slot, entry_type, role, macros, agent_suggestion, confirmed, " +
-  "notes, serving_multiplier, quantity_g, original_snapshot, adjusted_snapshot";
+  "notes, serving_multiplier, quantity_g, original_snapshot, adjusted_snapshot, source_uuid";
 
 const NUTRIENT_MAP: Record<string, string> = {
   "Energy":                      "kcal",
@@ -109,6 +112,8 @@ export function rowToMealCard(e: any) {
     agent_suggestion:   e.agent_suggestion ?? null,
     metadata:           snap,
     recipe_uuid:        snap.recipe_uuid ?? null,
+    // The catalog item (side_uuid or snack_uuid) behind a side or snack entry; null for the rest.
+    catalog_uuid:       isCatalog ? (e.source_uuid ?? null) : null,
     serving_multiplier: mult,
   };
   if (!isRecipeShaped) {

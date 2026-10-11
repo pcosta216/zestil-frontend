@@ -1,8 +1,8 @@
-// The macro rings shown in WeekdayRecipeCard's macro panel: a fixed three-quarter arc (decorative —
-// it is not a share of any goal), the rounded value and unit inside, the label under it. Same
-// geometry and colours as the card, which still carries its own two copies of this markup.
-// Unlike the card, a ring may shrink below 40px (min-w-0 + max-w-full on a square viewBox) so all of
-// them stay on one line when the row is narrower than they are, e.g. inside a phone-width chat bubble.
+// The macro rings: a fixed three-quarter arc (decorative — it is not a share of any goal), the rounded
+// value and unit inside, the label under it. Used by the plan card (WeekdayRecipeCard) and by the snack
+// and side rows (UiBodyBlocks), so they cannot drift apart. A ring may shrink below 40px (min-w-0 +
+// max-w-full on a square viewBox) so all of them stay on one line when the row is narrower than they
+// are, e.g. inside a phone-width chat bubble.
 const MACRO_RINGS = [
   { key: "kcal"    as const, label: "kcal",    unit: "",   fill: "#23BCFD", track: "#C8EDFE" },
   { key: "protein" as const, label: "protein", unit: "g",  fill: "#3B6D11", track: "#E8F0DC" },

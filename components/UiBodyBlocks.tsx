@@ -1,12 +1,13 @@
 "use client";
 
 import { useId, useState, type ComponentType, type ReactNode } from "react";
-import { createClient } from "@/lib/supabase/browser";
+import { callEdge } from "@/lib/edge-call";
 import { MacroRings } from "@/components/MacroRings";
 import { MiniMarkdown } from "@/components/MiniMarkdown";
+import { CARD, CELL, GROUP_COLS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, TONES } from "@/components/ui-style";
 import { ArrowLeftRight, Ban, Check, ChevronDown, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
 import {
-  ROOT_SCOPE, applyBlocks, applyReplace, applyRevert, findNutrition, groupScope, isAllowedCall, parseUiBody, previousOf, substituteValue,
+  ROOT_SCOPE, applyBlocks, applyReplace, applyRevert, findNutrition, groupScope, isAllowedCall, previousOf,
   type UiBlock, type UiBody, type UiButton, type UiCallAction, type UiTone,
 } from "@/lib/ui-body";
 
@@ -15,26 +16,6 @@ const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>
   trash: Trash2, edit: Pencil, toggle: ToggleRight, undo: Undo2, info: Info,
   check: Check, cross: X, alert: TriangleAlert, plus: Plus, swap: ArrowLeftRight, block: Ban,
 };
-
-const PILL = "inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11.5px] font-medium border transition-colors outline-none disabled:opacity-50 disabled:cursor-not-allowed";
-// A group's buttons share one row as equal-width cells, icon over label: four labelled pills need
-// ~350px, so in a phone-width bubble they wrapped into rows of different lengths.
-const CELL = "flex flex-col items-center justify-center gap-0.5 min-w-0 px-1 py-1.5 rounded-lg text-[10px] font-medium leading-tight text-center whitespace-nowrap border transition-colors outline-none disabled:opacity-50 disabled:cursor-not-allowed";
-const GROUP_COLS: Record<number, string> = { 1: "grid-cols-1", 2: "grid-cols-2", 3: "grid-cols-3" };
-const PILL_SECONDARY = "bg-green-light border-green-border text-green-primary enabled:hover:bg-green-border";
-const PILL_PRIMARY = "bg-green-primary border-green-primary text-white enabled:hover:bg-green-dark";
-// The recipe card's action colours (WeekdayRecipeCard): delete red, info blue, "more" grey. The yellow
-// is the one WeekdayGrid's rings turn at 115% of a goal.
-const RED = "bg-red-500 border-red-500 text-white enabled:hover:bg-red-600 enabled:hover:border-red-600";
-const BLUE = "bg-[#23BCFD] border-[#23BCFD] text-white enabled:hover:bg-[#0ea5d6] enabled:hover:border-[#0ea5d6]";
-const GREY = "bg-gray-400 border-gray-400 text-white enabled:hover:bg-gray-500 enabled:hover:border-gray-500";
-const YELLOW = "bg-[#f9cb16] border-[#f9cb16] text-text-main enabled:hover:bg-[#e6b800] enabled:hover:border-[#e6b800]";
-// The colour follows the icon's meaning, never the payload (contract §3.2): trash red, edit grey,
-// info blue, alert yellow. The rest (toggle, undo, check, cross, plus, swap, block) are "open" there
-// and keep the green style. It replaces the style's green, so a `trash` button is red whether primary
-// or not.
-const TONES: Record<string, string> = { trash: RED, edit: GREY, info: BLUE, alert: YELLOW };
-const CARD = "bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg";
 
 // A notice is drawn in its tone's colour, icon included, whatever the icon is (§3.1.7): the icon is
 // the tone's colour, and the open panel is tinted with it. `info` and `forbidden` are "open" there (no
@@ -56,10 +37,6 @@ function without<T>(rec: Record<string, T>, k: string): Record<string, T> {
   const next = { ...rec };
   delete next[k];
   return next;
-}
-
-function Spinner({ size = 12 }: { size?: number }) {
-  return <span className="rounded-full border-[1.5px] border-current border-t-transparent animate-spin inline-block" style={{ width: size, height: size }} />;
 }
 
 type ChoiceData = Extract<UiBlock, { type: "choice" }>;
@@ -172,26 +149,11 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
     setErrors((e) => without(e, scope));
     let reason: string | undefined;
     try {
-      const supabase = createClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) throw new Error("no session");
-      const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${action.endpoint}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify(value === undefined ? action.body : substituteValue(action.body, value)),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const message = typeof data.message === "string" && data.message ? data.message : undefined;
-      const fromBody = parseUiBody(data.ui_body);
-      if (switchKey && (data.ok === false || !fromBody)) {
+      const { ok, message, sentBody, uiBody: reply } = await callEdge(action, value);
+      if (switchKey && (ok === false || !sentBody)) {
         reason = message;
         throw new Error("switch call failed");
       }
-      const reply: UiBody | undefined = fromBody ?? (message ? { version: 1, blocks: [{ type: "text", caption: message }] } : undefined);
       if (!reply) throw new Error("empty reply");
       onChange((prev) => applyBlocks(prev, scope, reply.blocks, reply.version));
       if (switchKey) setSw((s) => without(s, switchKey)); // the reply's own state rules from here

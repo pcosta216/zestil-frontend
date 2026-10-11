@@ -2,7 +2,8 @@
 
 Status: live · Last verified: 2026-09-25
 Component: `app/zestil/PlanTab.tsx` (mounted by `app/zestil/AppShell.tsx`) · Cards:
-`components/WeekdayGrid.tsx`, `components/WeekdayRecipeCard.tsx` · Mapper: `lib/plan-card.ts`
+`components/WeekdayGrid.tsx`, `components/WeekdayRecipeCard.tsx` (plan entries), `components/IngredientCard.tsx`
+(ingredient suggestions) · Mapper: `lib/plan-card.ts`
 Verify: `scripts/plan-seed/verify-plan-tab.mjs` — seeds real `tbl_week_plan_entries` rows (plain
 recipe, optimised recipe, ingredient, and a delete target) for `doe@gmail.com` after walking her
 through onboarding for real goals data, then drives the tab in a browser
@@ -52,7 +53,7 @@ would draw them twice.
 | `recipe_list` | plain markdown |
 | `macro_summary` | regex-parses `"N kcal … / goal"` out of the text into a ring; text-only if the phrasing doesn't match (`PlanTab.tsx:158-161`) |
 | `suggestion_pending` | Confirm / Reject buttons that resend the canned phrases `"Yes, confirm the change"` / `"No, keep the original"` |
-| `ingredients_list` | `WeekdayRecipeCard` rows (`cardVariant="ingredient"`) with an Add action |
+| `ingredients_list` | `IngredientCard` rows with an Add action |
 | `recipe` | markdown + a hero image if `metadata.media.image_url` is set |
 | `feedback` | generic markdown bubble, content is the `ui_body` (below). `meal_cards` / `changed_dates` are **ignored** on this type, so the reply neither renders a plan grid nor triggers the day-view re-fetch — the chat just continues |
 | `info` (also a missing `response_type`) | generic markdown bubble. `meal_cards` / `changed_dates` are **ignored**, same as `feedback`: any cards would otherwise hide the bubble (below) and the sentence with it |
@@ -160,12 +161,31 @@ another Edge Function, `optimize-day-agent`), re-fetches just that day, and spli
 **the specific transcript block the button lived in** — not a global refresh — showing a result
 banner either way.
 
-Each row is a `WeekdayRecipeCard`, collapsed by default to a 40px bar (name, kcal pill, optimised
-badge); tapping it expands an actions strip — Macros / More / Delete for recipe-shaped entries,
-Add / More / Info for the `ingredients_list` variant. `lib/plan-card.ts:rowToMealCard` is the one
-place `is_optimised` / `original_macros` / `quantity_g` are computed from a raw
-`tbl_week_plan_entries` row; it's shared by the `today` and `week` routes specifically so they
-can't drift apart on that mapping (its own header comment says so).
+Each row is a `WeekdayRecipeCard`: a 40px bar (name, kcal pill, and the optimised / suggestion /
+serving pills) that **expands in place on tap**, the way the snack and side rows do, with no chevron
+or other hint. Cards open and close independently, so several can be open at once. Open, a card
+shows the six macro rings (`MacroRings`, one row, following the "original / optimised" pill) and
+equal-width buttons, in the colours of the icon table: **Delete** (red, `onDelete`), **View recipe**
+(blue, only when the entry has a `recipe_uuid`) and, for a side or a snack, a grey button that stops
+suggesting the item. Both pills stay visible while open.
+
+The stop-suggesting button (`lib/stop-suggesting.ts`) is a direct catalog call, like the snack list's:
+a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: false`: the optimizer stops
+picking it, the user can still add it by hand); a **side** gets "Remove from my sides" (`sides-catalog`
+`remove`). Both take the item from `catalog_uuid`, which `rowToMealCard` fills from
+`tbl_week_plan_entries.source_uuid` for side and snack entries (null for recipes and ingredients, which
+get no such button). The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
+and an Undo, is drawn inside the card with `UiBodyBlocks`, so Undo works with no extra code. It does not
+touch the planned entry: that stays on the day. A failed call shows an inline error. The recipe is fetched
+when View recipe is tapped (once per card), not when the card appears.
+
+`IngredientCard` (an `ingredients_list` suggestion, not a planned item) keeps the original behaviour: a
+bar that slides in Add / More / Info. Only Add does anything; Info has no handler, and More's two items
+have nothing to open for a bare ingredient name, so they now just close the menu.
+
+`lib/plan-card.ts:rowToMealCard` is the one place `is_optimised` / `original_macros` / `quantity_g` /
+`catalog_uuid` are computed from a raw `tbl_week_plan_entries` row; it's shared by the `today` and
+`week` routes specifically so they can't drift apart on that mapping (its own header comment says so).
 
 **Recipe save** (`responseType === "recipe"` messages only, `PlanTab.tsx:800-930`): a heart button
 opens a collections checklist (`collections` come from the page's initial props, filtered to drop
@@ -183,22 +203,10 @@ wires to a `GET /api/recipes` refetch that updates the Saved tab's list (`AppShe
 `selectedSlots` (`PlanTab.tsx:446, 906-927`) only toggles their own highlight; nothing reads the
 map afterward, and no request is ever sent for a slot pick.
 
-**The optimised badge and the expanded action bar are mutually exclusive.**
-`isOptimised && !barOpen` (`WeekdayRecipeCard.tsx:361`) — tapping a row to reach Delete/Macros
-hides the "✦ optimised" pill until the row collapses again. Not lost, just not drawn there.
-
-**"View Recipe" on a non-recipe card opens an empty overlay.** It's always offered
-(`DEFAULT_MORE_OPTIONS`, unconditional on `cardVariant`), but the fetch behind it is gated on
-`recipeUuid` (`WeekdayRecipeCard.tsx:93-102`) — an ingredient-shaped entry has none, so the
-overlay opens to just the "← Back" header and nothing else, no error message. "Show Macros" on the
-same card works fine: the macro panel's fallback branch (`!loading && !recipe && displayMacros`,
-`WeekdayRecipeCard.tsx:296`) renders rings straight from the card's own `macros`/`originalMacros`
-props, independent of the recipe fetch.
-
-**The macro-overlay rings are cosmetic, not proportional.** Both branches of the expanded macro
-panel hardcode `strokeDasharray={circ * 0.75}` (`WeekdayRecipeCard.tsx:278, 307`) — the ring
-always draws at 75% regardless of value; only the center label number is real. `WeekdayGrid`'s own
-per-day rings genuinely scale to `goals` — this overlay's rings don't scale to anything.
+**The macro rings are cosmetic, not proportional.** `MacroRings` draws every ring at a fixed 75% arc
+regardless of value; only the number in the middle is real. `WeekdayGrid`'s own per-day rings genuinely
+scale to `goals` — the per-card rings don't scale to anything. A three-digit sodium value (`900mg`) is
+wider than the ring's inside.
 
 **Frozen snapshots.** Every date-strip tap, or the "w" week button, fetches fresh from the DB and
 appends a **new** block rather than patching one already on screen — scrolling back shows what a
@@ -214,6 +222,9 @@ the exception: each patches only the one block its button lived in. See
   through `/api/goals`
 - Two Supabase Edge Functions: `router-agent` (chat) and `optimize-day-agent` (Optimise) — their
   own logic isn't visible from this repo
+- Two more, called straight from the browser with the user's JWT (`lib/edge-call.ts`, allowlist in
+  `lib/ui-body.ts`): `sides-catalog` and `snacks-catalog`, by `ui_body` buttons and by a plan card's
+  stop-suggesting button
 
 ## Writes
 
@@ -223,3 +234,5 @@ the exception: each patches only the one block its button lived in. See
   proxy to — not visible from this repo
 - `POST /api/recipe/submit`, `POST /api/recipe/collections`
 - Supabase RPC `link_user_recipe` — called directly from the client, not via an API route
+- `snacks-catalog` `set_auto` / `sides-catalog` `remove` (and their Undos) — a plan card's stop-suggesting
+  button, also called directly from the client; they change the user's catalog, not the planned entry
