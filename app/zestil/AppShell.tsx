@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useRecipeSetup } from "./useRecipeSetup";
 import { ExploreTab } from "./ExploreTab";
 import { PlanTab } from "./PlanTab";
@@ -22,11 +22,13 @@ interface Props {
 
 export function AppShell({ user, initialRecipes, initialCollections, profile }: Props) {
   const searchParams = useSearchParams();
-  const router = useRouter();
   const activeTab = (searchParams.get("tab") as Tab) ?? "explore";
+  // Native replaceState syncs with useSearchParams without a server round-trip.
+  // router.replace would re-run page.tsx (auth + 3 Supabase queries) on every
+  // tab switch and delay the UI update until that finished.
   const setActiveTab = useCallback((tab: Tab) => {
-    router.replace(`/zestil?tab=${tab}`, { scroll: false });
-  }, [router]);
+    window.history.replaceState(null, "", `/zestil?tab=${tab}`);
+  }, []);
 
   const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
   const [collections, setCollections] = useState<Collection[]>(initialCollections);

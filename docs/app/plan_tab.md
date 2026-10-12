@@ -162,12 +162,14 @@ another Edge Function, `optimize-day-agent`), re-fetches just that day, and spli
 banner either way.
 
 Each row is a `WeekdayRecipeCard`: a 40px bar (name, kcal pill, and the optimised / suggestion /
-serving pills) that **expands in place on tap**, the way the snack and side rows do, with no chevron
-or other hint. Cards open and close independently, so several can be open at once. Open, a card
-shows the six macro rings (`MacroRings`, one row, following the "original / optimised" pill) and
-equal-width buttons, in the colours of the icon table: **Delete** (red, `onDelete`), **View recipe**
-(blue, only when the entry has a `recipe_uuid`) and, for a side or a snack, a grey button that stops
-suggesting the item. Both pills stay visible while open.
+serving pills). Tapping it **slides icon buttons in at the right end of the bar**. Cards open and close
+independently, so several can be open at once. The buttons are icon-only, in the colours of the icon table,
+each with an `aria-label` and `title`: **Info** (blue; shows or hides the six macro rings, `MacroRings`, one
+row, beneath the bar; closing the card hides them again), **View recipe** (green, only when the entry has a
+`recipe_uuid`), for a side or a snack a grey button that stops suggesting the item, and **Delete** (red,
+`onDelete`), always the right-most so it keeps its place. While open, the "optimised" and "suggestion"
+pills are hidden to make room, so the original / optimised switch is used while closed and the rings
+follow it.
 
 The stop-suggesting button (`lib/stop-suggesting.ts`) is a direct catalog call, like the snack list's:
 a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: false`: the optimizer stops

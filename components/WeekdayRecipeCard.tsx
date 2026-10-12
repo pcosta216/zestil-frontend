@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Ban, BookOpenText, Trash2 } from "@/lib/icons";
+import { Ban, BookOpenText, Info, Trash2 } from "@/lib/icons";
 import { MacroRings } from "@/components/MacroRings";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
-import { BLUE, CELL_TALL, GREY, GROUP_COLS, RED, Spinner } from "@/components/ui-style";
+import { Spinner } from "@/components/ui-style";
 import { ServingInfo } from "./serving_info";
 import { RecipeDetailHero } from "./RecipeDetailHero";
 import { callEdge } from "@/lib/edge-call";
@@ -36,9 +36,10 @@ interface Props {
   stopSuggesting?:     StopSuggesting;
 }
 
-// One planned item: a 40px bar (name, pills, kcal) that expands in place on tap, the way the snack and side
-// rows do. Open, it shows the macro rings and the actions: Delete, View recipe (only when there is a recipe)
-// and, for a side or a snack, stop suggesting it. Each card opens and closes on its own.
+// One planned item: a 40px bar (name, pills, kcal). Tapping it slides the action buttons in at the right end
+// of the bar: Info (shows the macro rings beneath), View recipe (when there is a recipe), stop suggesting
+// (for a side or a snack) and Delete, always last so it stays at the same right edge. Each card opens and
+// closes on its own.
 export function WeekdayRecipeCard({
   title, subtitle, kcal, hasSuggestion,
   servings_value, serving_multiplier,
@@ -46,6 +47,7 @@ export function WeekdayRecipeCard({
   onDelete, stopSuggesting,
 }: Props) {
   const [open,         setOpen]         = useState(false);
+  const [showRings,    setShowRings]    = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [overlayOpen,  setOverlayOpen]  = useState(false);
   const [recipe,       setRecipe]       = useState<RecipeCollection | null>(null);
@@ -87,10 +89,19 @@ export function WeekdayRecipeCard({
     }
   }
 
+  const BTN_RED  = "bg-red-500 hover:bg-red-600";
+  const BTN_BLUE = "bg-[#23BCFD] hover:bg-[#0ea5d6]";
+  const BTN_GREEN = "bg-green-primary hover:bg-green-dark";
+  const BTN_GREY = "bg-gray-400 hover:bg-gray-500";
+
+  // Closing the bar also hides the rings, so the next tap opens it as it was first.
+  function toggleOpen() { setOpen((v) => !v); setShowRings(false); }
+
   const cells = [
-    { id: "delete", caption: "Delete", icon: <Trash2 size={14} />, tone: RED, onClick: () => { setOpen(false); onDelete?.(); } },
-    ...(recipeUuid ? [{ id: "recipe", caption: "View recipe", icon: <BookOpenText size={14} />, tone: BLUE, onClick: openRecipe }] : []),
-    ...(stopSuggesting ? [{ id: "stop", caption: stopSuggesting.caption, icon: stopping ? <Spinner size={14} /> : <Ban size={14} />, tone: GREY, onClick: stopSuggestingNow }] : []),
+    ...(displayMacros ? [{ id: "info", caption: showRings ? "Hide macros" : "Show macros", icon: <Info size={15} />, tone: BTN_BLUE, onClick: () => setShowRings((v) => !v) }] : []),
+    ...(recipeUuid ? [{ id: "recipe", caption: "View recipe", icon: <BookOpenText size={15} />, tone: BTN_GREEN, onClick: openRecipe }] : []),
+    ...(stopSuggesting ? [{ id: "stop", caption: stopSuggesting.caption, icon: stopping ? <Spinner size={15} /> : <Ban size={15} />, tone: BTN_GREY, onClick: stopSuggestingNow }] : []),
+    { id: "delete", caption: "Remove from plan", icon: <Trash2 size={15} />, tone: BTN_RED, onClick: () => { setOpen(false); setShowRings(false); onDelete?.(); } },
   ];
 
   return (
@@ -124,9 +135,9 @@ export function WeekdayRecipeCard({
           role="button"
           tabIndex={0}
           aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
+          onClick={toggleOpen}
           onKeyDown={(e) => {
-            if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); setOpen((v) => !v); }
+            if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); toggleOpen(); }
           }}
           className="w-full h-10 pl-3 flex items-center cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-green-border"
         >
@@ -137,13 +148,13 @@ export function WeekdayRecipeCard({
             )}
           </div>
 
-          {hasSuggestion && (
+          {hasSuggestion && !open && (
             <span className="ml-1.5 flex-shrink-0 px-1.5 py-0.5 bg-amber-50 border border-amber-200 rounded text-[9px] text-amber-600 whitespace-nowrap">
               suggestion
             </span>
           )}
 
-          {isOptimised && (
+          {isOptimised && !open && (
             <button
               onClick={(e) => { e.stopPropagation(); setShowOriginal((v) => !v); }}
               className={`ml-1.5 flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] whitespace-nowrap border transition-colors ${
@@ -168,21 +179,33 @@ export function WeekdayRecipeCard({
             </span>
           )}
 
-          <div className="w-3 flex-shrink-0" />
+          <div
+            className="flex h-full flex-shrink-0 overflow-hidden transition-[max-width] duration-200"
+            style={{ maxWidth: open ? 6 + 32 * cells.length : 0 }}
+          >
+            <div className="w-1.5 flex-shrink-0" />
+            {cells.map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                aria-label={c.caption}
+                title={c.caption}
+                tabIndex={open ? 0 : -1}
+                disabled={stopping}
+                onClick={(e) => { e.stopPropagation(); c.onClick(); }}
+                className={`h-full w-8 flex items-center justify-center text-white transition-colors disabled:opacity-60 ${c.tone}`}
+              >
+                {c.icon}
+              </button>
+            ))}
+          </div>
+
+          <div className={`flex-shrink-0 transition-[width] duration-200 ${open ? "w-0" : "w-3"}`} />
         </div>
 
-        {open && (
+        {open && ((showRings && displayMacros) || stopError || reply) && (
           <div className="mx-3 pt-2.5 pb-2.5 border-t border-[rgba(0,0,0,0.07)] flex flex-col gap-2.5">
-            {displayMacros && <MacroRings macros={displayMacros} />}
-
-            <div className={`grid gap-1.5 ${GROUP_COLS[cells.length] ?? "grid-cols-3"}`}>
-              {cells.map((c) => (
-                <button key={c.id} type="button" disabled={stopping} onClick={c.onClick} className={`${CELL_TALL} ${c.tone}`}>
-                  {c.icon}
-                  {c.caption}
-                </button>
-              ))}
-            </div>
+            {showRings && displayMacros && <MacroRings macros={displayMacros} />}
 
             {stopError && <div className="text-[11px] text-red-500">{stopError}</div>}
 
