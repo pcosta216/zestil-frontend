@@ -325,11 +325,24 @@ function cap(s: string) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-// "Lunch" for mains; "Lunch - Side" / "Dinner - Dessert" for non-main roles.
+// "Lunch" for mains; "Lunch ⋅ Side" / "Dinner ⋅ Dessert" for non-main roles. A side, snack or ingredient
+// then gets its amount ("Dinner ⋅ Side ⋅ 50g"), a recipe its servings ("Dinner ⋅ 0.5 servings"). A side or
+// snack that is recipe-shaped has no gram amount on the card, so it gets none.
+function trimNum(n: number): string {
+  return String(parseFloat(n.toFixed(2)));
+}
+
 function slotRoleLabel(card: MealCard): string {
   const slot = cap(card.meal_slot ?? "");
   const role = (card.role ?? "main").toLowerCase();
-  return role === "main" ? slot : `${slot} - ${cap(role)}`;
+  const parts = [slot];
+  if (role !== "main") parts.push(cap(role));
+  if ((card.entry_type === "snack" || card.entry_type === "side" || card.entry_type === "ingredient") && card.quantity_g != null) {
+    parts.push(`${trimNum(card.quantity_g)}g`);
+  } else if (card.entry_type === "recipe" && card.serving_multiplier != null) {
+    parts.push(`${trimNum(card.serving_multiplier)} ${card.serving_multiplier === 1 ? "serving" : "servings"}`);
+  }
+  return parts.join(" ⋅ ");
 }
 
 function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisingDate }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void; onOptimise?: (date: string) => void; optimisingDate?: string | null }) {
@@ -385,6 +398,7 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack') && (card.metadata?.side_kind ?? card.metadata?.snack_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
+                  notes={card.notes}
                   recipeUuid={card.recipe_uuid ?? card.metadata?.recipe_uuid ?? undefined}
                   macros={card.macros}
                   originalMacros={card.original_macros}

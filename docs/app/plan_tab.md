@@ -165,11 +165,16 @@ Each row is a `WeekdayRecipeCard`: a 40px bar (name, kcal pill, and the optimise
 serving pills). Tapping it **slides icon buttons in at the right end of the bar**. Cards open and close
 independently, so several can be open at once. The buttons are icon-only, in the colours of the icon table,
 each with an `aria-label` and `title`: **Info** (blue; shows or hides the six macro rings, `MacroRings`, one
-row, beneath the bar; closing the card hides them again), **View recipe** (green, only when the entry has a
+row, beneath the bar, then the entry's `notes` when it has any, as a small muted line with no label; closing the card hides them again), **View recipe** (green, only when the entry has a
 `recipe_uuid`), for a side or a snack a grey button that stops suggesting the item, and **Delete** (red,
 `onDelete`), always the right-most so it keeps its place. While open, the "optimised" and "suggestion"
 pills are hidden to make room, so the original / optimised switch is used while closed and the rings
 follow it.
+
+The small line under the name (`slotRoleLabel` in `PlanTab.tsx`) reads `Dinner`, `Dinner ⋅ Side` for a non-main
+role, then the amount: `⋅ 50g` for a side, snack or ingredient (`quantity_g`), `⋅ 0.5 servings` for a recipe
+(`serving_multiplier`). A recipe-shaped side or snack has no gram amount on the card, so its line stops at
+the role.
 
 The stop-suggesting button (`lib/stop-suggesting.ts`) is a direct catalog call, like the snack list's:
 a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: false`: the optimizer stops

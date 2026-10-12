@@ -31,17 +31,18 @@ interface Props {
   servings_value?:     number;
   serving_multiplier?: number;
   hasSuggestion?:      boolean;
+  notes?:              string | null;
   recipeUuid?:         string;
   onDelete?:           () => void;
   stopSuggesting?:     StopSuggesting;
 }
 
 // One planned item: a 40px bar (name, pills, kcal). Tapping it slides the action buttons in at the right end
-// of the bar: Info (shows the macro rings beneath), View recipe (when there is a recipe), stop suggesting
+// of the bar: Info (shows the macro rings and the notes beneath), View recipe (when there is a recipe), stop suggesting
 // (for a side or a snack) and Delete, always last so it stays at the same right edge. Each card opens and
 // closes on its own.
 export function WeekdayRecipeCard({
-  title, subtitle, kcal, hasSuggestion,
+  title, subtitle, kcal, hasSuggestion, notes,
   servings_value, serving_multiplier,
   recipeUuid, macros, originalMacros, isOptimised,
   onDelete, stopSuggesting,
@@ -61,6 +62,7 @@ export function WeekdayRecipeCard({
 
   const displayMacros = (isOptimised && showOriginal && originalMacros) ? originalMacros : macros;
   const displayKcal   = displayMacros?.kcal ?? kcal;
+  const noteText      = notes?.trim() || null;
 
   // The recipe is fetched when View recipe is tapped, not when the card appears: a day plan used to fetch
   // every card's recipe up front just to have it ready.
@@ -98,7 +100,7 @@ export function WeekdayRecipeCard({
   function toggleOpen() { setOpen((v) => !v); setShowRings(false); }
 
   const cells = [
-    ...(displayMacros ? [{ id: "info", caption: showRings ? "Hide macros" : "Show macros", icon: <Info size={15} />, tone: BTN_BLUE, onClick: () => setShowRings((v) => !v) }] : []),
+    ...(displayMacros || noteText ? [{ id: "info", caption: showRings ? "Hide details" : "Show details", icon: <Info size={15} />, tone: BTN_BLUE, onClick: () => setShowRings((v) => !v) }] : []),
     ...(recipeUuid ? [{ id: "recipe", caption: "View recipe", icon: <BookOpenText size={15} />, tone: BTN_GREEN, onClick: openRecipe }] : []),
     ...(stopSuggesting ? [{ id: "stop", caption: stopSuggesting.caption, icon: stopping ? <Spinner size={15} /> : <Ban size={15} />, tone: BTN_GREY, onClick: stopSuggestingNow }] : []),
     { id: "delete", caption: "Remove from plan", icon: <Trash2 size={15} />, tone: BTN_RED, onClick: () => { setOpen(false); setShowRings(false); onDelete?.(); } },
@@ -203,9 +205,13 @@ export function WeekdayRecipeCard({
           <div className={`flex-shrink-0 transition-[width] duration-200 ${open ? "w-0" : "w-3"}`} />
         </div>
 
-        {open && ((showRings && displayMacros) || stopError || reply) && (
+        {open && (showRings || stopError || reply) && (
           <div className="mx-3 pt-2.5 pb-2.5 border-t border-[rgba(0,0,0,0.07)] flex flex-col gap-2.5">
             {showRings && displayMacros && <MacroRings macros={displayMacros} />}
+
+            {showRings && noteText && (
+              <p className="text-[10px] font-medium text-text-muted whitespace-pre-wrap break-words">{noteText}</p>
+            )}
 
             {stopError && <div className="text-[11px] text-red-500">{stopError}</div>}
 
