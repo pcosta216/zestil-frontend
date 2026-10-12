@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { EDGE_REGION_HEADER } from "@/lib/edge-region";
 
 const CHAT_FUNCTION_URL =
   process.env.CHAT_FUNCTION_URL ??
@@ -29,6 +30,7 @@ export async function POST(req: NextRequest) {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${session.access_token}`,
+        ...EDGE_REGION_HEADER,
       },
       body: JSON.stringify({
         ...body,

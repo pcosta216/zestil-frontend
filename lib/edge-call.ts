@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/browser";
 import { isAllowedCall, parseUiBody, substituteValue, type UiBody, type UiCallAction } from "@/lib/ui-body";
+import { EDGE_REGION_HEADER } from "@/lib/edge-region";
 
 export type EdgeReply = {
   ok?: boolean;
@@ -26,6 +27,7 @@ export async function callEdge(action: UiCallAction, value?: string | boolean): 
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
+      ...EDGE_REGION_HEADER,
     },
     body: JSON.stringify(value === undefined ? action.body : substituteValue(action.body, value)),
   });

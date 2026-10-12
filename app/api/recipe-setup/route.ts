@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { EDGE_REGION_HEADER } from "@/lib/edge-region";
 
 const PROFILE_AGENT_URL =
   process.env.USER_PROFILE_FUNCTION_URL ??
@@ -48,7 +49,7 @@ export async function POST() {
 
     const res = await fetch(PROFILE_AGENT_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, ...EDGE_REGION_HEADER },
       body: JSON.stringify({ user_id: user.id, mode: "ensure" }),
     });
     const body = await res.json().catch(() => null) as { status?: SetupStatus } | null;

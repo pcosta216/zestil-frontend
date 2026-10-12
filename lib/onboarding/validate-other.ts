@@ -3,6 +3,7 @@ import { nodeOptionLabels } from "./content";
 import { humanizeSlug } from "./cuisines";
 import { getPath } from "./paths";
 import { isValidatorSection, TOTAL_FAILURE_REASON } from "./validator-sections";
+import { EDGE_REGION_HEADER } from "@/lib/edge-region";
 
 // Server-only. Batch-validates one whole other_capture submission (or n_favorite_recipes'
 // own freeform entries) against the Onboarding Validator Agent — a separate Supabase Edge
@@ -140,7 +141,7 @@ export async function validateEntries(
   try {
     const res = await fetch(FUNCTION_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}`, ...EDGE_REGION_HEADER },
       body: JSON.stringify({ user_id: userId, section, context, entries }),
       signal: controller.signal,
     });

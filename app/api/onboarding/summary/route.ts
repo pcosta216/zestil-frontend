@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { EDGE_REGION_HEADER } from "@/lib/edge-region";
 
 // POST /api/onboarding/summary — the recap rendered on n_summary.
 //
@@ -38,7 +39,7 @@ export async function POST() {
   try {
     const res = await fetch(FUNCTION_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}`, ...EDGE_REGION_HEADER },
       body: JSON.stringify({ user_id: user.id }), // the entire contract — no context, no entries
       signal: controller.signal,
     });
