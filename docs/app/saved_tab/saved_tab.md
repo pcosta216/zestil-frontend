@@ -90,6 +90,14 @@ after the recipes were read:
 
 A triangle is white only when the view gives no value.
 
+**Where the user was** (`lastView`, module memory for the whole visit): the sub-tab, collection,
+"Not in automatic planning" filter, search and scroll position are kept as they change, and
+`SavedTab` starts from them. On each show (`active`, from `AppShell`) the list's scroll container is
+put back at `lastView.scrollTop` before the first paint. This covers two cases that would otherwise
+start at the top: Back from a recipe page rebuilds the tab from the page Next cached, and a tab hidden
+by another loses its scroll position. The scroll is kept only while the tab is visible, since a hidden
+box reads 0. A new visit (a reload) starts fresh.
+
 **Scroll thumb** (`SavedTab.tsx:131-154`): a custom scrollbar indicator recomputed from
 `scrollTop`/`scrollHeight`/`clientHeight` on every scroll/resize and whenever `displayed` changes;
 hidden entirely when content already fits without scrolling.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useEffect, useCallback, useMemo } from "react";
+import { useRef, useState, useEffect, useLayoutEffect, useCallback, useMemo } from "react";
 import { RecipeGrid } from "@/components/RecipeGrid";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 import { BookOpenText, Search, Plus } from "@/lib/icons";
@@ -8,6 +8,8 @@ import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { announceItemSaved } from "@/lib/diet";
 
 interface Props {
+  /** The Saved tab is the one on screen: the list is put back where the user left it each time it is. */
+  active: boolean;
   recipes: RecipeCollection[];
   collections?: { id: number; name: string }[];
   onRecipeSaved?: () => void;
@@ -32,15 +34,27 @@ function parseRecipeInput(raw: string): { url: string } | { text: string } {
   return { text: trimmed };
 }
 
-export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
+// Where the user was in the list: its sub-tab, filters, search and scroll. Back from a recipe page rebuilds
+// this tab (AppShell is rebuilt from the page Next cached), and a tab hidden by another loses its scroll
+// position, so both would start from the top. Module memory lasts the whole visit; it is only written in
+// the browser (effects and scroll events), since on the server the module is shared by every request.
+const lastView = {
+  subTab: "mine" as "mine" | "recent",
+  selected: null as string | null,
+  outOnly: false,
+  query: "",
+  scrollTop: 0,
+};
+
+export function SavedTab({ active, recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(lastView.selected);
   // "Not in automatic planning" from the collections panel; combines with the collection filter.
-  const [outOnly, setOutOnly] = useState(false);
-  const [query, setQuery] = useState("");
-  const [subTab, setSubTab] = useState<"mine" | "recent">("mine");
+  const [outOnly, setOutOnly] = useState(lastView.outOnly);
+  const [query, setQuery] = useState(lastView.query);
+  const [subTab, setSubTab] = useState<"mine" | "recent">(lastView.subTab);
   const [addOpen, setAddOpen] = useState(false);
   const [addText, setAddText] = useState("");
   const [addSaving, setAddSaving] = useState(false);
@@ -189,6 +203,26 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
       window.removeEventListener("resize", updateThumb);
     };
   }, [updateThumb, displayed]);
+
+  useEffect(() => {
+    Object.assign(lastView, { subTab, selected, outOnly, query });
+  }, [subTab, selected, outOnly, query]);
+
+  // Kept as the user scrolls; not while hidden, when the box has no height and reads 0.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const keep = () => {
+      if (el.clientHeight > 0) lastView.scrollTop = el.scrollTop;
+    };
+    el.addEventListener("scroll", keep, { passive: true });
+    return () => el.removeEventListener("scroll", keep);
+  }, []);
+
+  // Back where the user was, before the first paint, each time the tab is shown.
+  useLayoutEffect(() => {
+    if (active && scrollRef.current) scrollRef.current.scrollTop = lastView.scrollTop;
+  }, [active]);
 
   function toggleCollection(name: string) {
     setSelected((prev) => (prev === name ? null : name));
