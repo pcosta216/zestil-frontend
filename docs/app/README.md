@@ -68,10 +68,12 @@ docs/app/
     discovery_progress.md      the last screen — not a node; replaces the old "You're all set"
     bugs_and_improvements.md   known-but-unfixed, and ideas — the one file about what ISN'T true
   plan_tab.md                the Plan tab (app/zestil/), outside onboarding — one screen, one file
+  diet_change.md             the diet search's progress screen and the diet-fit banner (DietHost)
   saved_tab/                 the Saved tab and the recipe detail route it links to
-    saved_tab.md              My recipes/Recent sub-tabs, search, collection filter, add-recipe
-    recipe_detail.md           /zestil/[id] — full recipe view, delete (also reused as an overlay
-                                by plan_tab.md)
+    saved_tab.md              My recipes/Recent sub-tabs, search, collection and planning filters,
+                                the planning triangle, add-recipe
+    recipe_detail.md           /zestil/[id] — full recipe view, the planning switch, delete (also
+                                reused as an overlay by plan_tab.md)
 ```
 
 `bugs_and_improvements.md` is the deliberate exception to rule 1's "current state only": it's a

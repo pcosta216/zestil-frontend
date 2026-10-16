@@ -7,6 +7,10 @@ import { Trash2, Plus } from "@/lib/icons";
 import type { RecipeCollection, Collection } from "@/lib/supabase/queries";
 import { isValidUrl, formatTime, formatDate } from "@/lib/recipe-format";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
+import { PlanningSwitch, useRecipePlanningSwitch } from "@/components/PlanningSwitch";
+
+// The source link and the planning switch share one row, at one height.
+const ROW_HEIGHT = "h-[27.6px]";
 
 function parseInlineMarkdown(text: string): React.ReactNode[] {
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/);
@@ -34,6 +38,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
     (c) => c.name.toLowerCase() !== "main" && !collectionNames.includes(c.name)
   );
   const imageUrl = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
+  const planning = useRecipePlanningSwitch(recipe.recipe_uuid, recipe.meal_title);
 
   async function handleDelete() {
     setDeleting(true);
@@ -137,30 +142,38 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
 
 
 
-        {/* Source link */}
-        {recipe.url && (
-          <a
-            href={recipe.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-sm text-green-primary bg-green-light border border-green-border rounded-xl px-4 py-3 hover:bg-green-border transition-colors w-fit"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
-              <polyline points="15 3 21 3 21 9" />
-              <line x1="10" y1="14" x2="21" y2="3" />
-            </svg>
-            View original recipe
-          </a>
+        {/* Source link, with the planning switch to its right (on its own when there's no link). The
+            switch shows once its state is read. */}
+        {(recipe.url || planning.ready) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {recipe.url && (
+              <a
+                href={recipe.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`flex items-center gap-2 text-sm text-green-primary bg-green-light border border-green-border rounded-xl px-4 ${ROW_HEIGHT} hover:bg-green-border transition-colors w-fit`}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                View original recipe
+              </a>
+            )}
+            {planning.ready && (
+              <PlanningSwitch on={planning.on} why={planning.why} busy={planning.busy} onFlip={planning.flip} className={ROW_HEIGHT} />
+            )}
+          </div>
         )}
         {/* Ingredients */}
         {recipe.recipe_data?.recipe_lines && recipe.recipe_data.recipe_lines.length > 0 && (
@@ -385,6 +398,14 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
           </div>
         </div>
       )}
+
+      {/* The planning switch's feedback — slides in from the bottom, same pattern as the tabs' save
+          banner. z-[70]: above the collection picker (z-[60]), and inside the Plan tab's z-50 overlay. */}
+      <div className={`fixed bottom-4 left-4 right-4 z-[70] transition-all duration-300 ease-out ${planning.banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${planning.banner?.type === "error" ? "bg-red-500" : "bg-green-primary"}`}>
+          {planning.banner?.message}
+        </div>
+      </div>
     </div>
   );
 }

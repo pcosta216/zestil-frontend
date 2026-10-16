@@ -24,6 +24,16 @@ export const YELLOW = "bg-[#f9cb16] border-[#f9cb16] text-text-main enabled:hove
 export const TONES: Record<string, string> = { trash: RED, edit: GREY, info: BLUE, alert: YELLOW };
 export const CARD = "bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg";
 
+// A switch's track and knob: the snack list's Auto switch (UiBodyBlocks) and the recipe page's
+// planning switch (PlanningSwitch) draw the same one.
+export function SwitchTrack({ on }: { on: boolean }) {
+  return (
+    <span className={`relative inline-block w-[26px] h-[14px] rounded-full transition-colors ${on ? "bg-green-primary" : "bg-gray-300"}`}>
+      <span className={`absolute top-[2px] left-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${on ? "translate-x-[12px]" : ""}`} />
+    </span>
+  );
+}
+
 export function Spinner({ size = 12 }: { size?: number }) {
   return <span className="rounded-full border-[1.5px] border-current border-t-transparent animate-spin inline-block" style={{ width: size, height: size }} />;
 }

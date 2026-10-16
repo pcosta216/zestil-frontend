@@ -5,8 +5,12 @@ import { RecipeGrid } from "@/components/RecipeGrid";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 import { BookOpenText, Search, Plus } from "@/lib/icons";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
+import { announceItemSaved } from "@/lib/diet";
+import { useRecipePlanning } from "./useRecipePlanning";
 
 interface Props {
+  /** The Saved tab is the one on screen: the planning state is read again each time it is. */
+  active: boolean;
   recipes: RecipeCollection[];
   collections?: { id: number; name: string }[];
   onRecipeSaved?: () => void;
@@ -31,11 +35,13 @@ function parseRecipeInput(raw: string): { url: string } | { text: string } {
   return { text: trimmed };
 }
 
-export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
+export function SavedTab({ active, recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+  // "Not in automatic planning" from the collections panel; combines with the collection filter.
+  const [outOnly, setOutOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [subTab, setSubTab] = useState<"mine" | "recent">("mine");
   const [addOpen, setAddOpen] = useState(false);
@@ -46,6 +52,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
   const [createDirty, setCreateDirty] = useState(false);
   const [banner, setBanner] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const planning = useRecipePlanning(active, recipes);
 
   // Same filter Explore/Plan apply to their own collections checklist — "main" is where an
   // unassigned recipe already lives by default, so it isn't offered as a pick here either.
@@ -100,6 +107,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
       setAddText("");
       setCheckedCollections(new Set());
       showBanner({ type: "success", message: "Recipe added to your collection!" });
+      announceItemSaved("recipe", recipeUuid);
       onRecipeSaved?.();
     } catch {
       showBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
@@ -136,6 +144,8 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
 
     let filtered = recipes;
     if (selected) filtered = filtered.filter((r) => r.collections_short_desc === selected);
+    const out = planning.state;
+    if (outOnly && out) filtered = filtered.filter((r) => out.has(r.recipe_uuid));
     if (query.trim()) {
       const q = query.toLowerCase();
       filtered = filtered.filter((r) => r.meal_title?.toLowerCase().includes(q) ?? false);
@@ -146,7 +156,23 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
       seen.add(r.recipe_uuid);
       return true;
     });
-  }, [recipes, selected, query, subTab, recentRecipes]);
+  }, [recipes, selected, outOnly, planning.state, query, subTab, recentRecipes]);
+
+  // Saved recipes kept out of automatic planning, each counted once (the view repeats a recipe per collection).
+  const outCount = useMemo(() => {
+    const out = planning.state;
+    return out ? new Set(recipes.map((r) => r.recipe_uuid).filter((u) => out.has(u))).size : 0;
+  }, [recipes, planning.state]);
+
+  // The last one switched back on: the filter would show nothing, under "No recipes yet".
+  useEffect(() => {
+    if (outOnly && outCount === 0) setOutOnly(false);
+  }, [outOnly, outCount]);
+
+  // Undefined until the state is read: a guessed "on" would be wrong for every recipe kept out.
+  function inPlanningOf(recipe: RecipeCollection): boolean | undefined {
+    return planning.state ? !planning.state.has(recipe.recipe_uuid) : undefined;
+  }
 
   const updateThumb = useCallback(() => {
     const el = scrollRef.current;
@@ -213,7 +239,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
           {subTab === "mine" && (
             <button
               onClick={() => setPanelOpen((o) => !o)}
-              aria-label="Filter by collection"
+              aria-label="Filter recipes"
               className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                 panelOpen
                   ? "bg-green-primary text-white"
@@ -225,13 +251,23 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
           )}
         </div>
 
-        {subTab === "mine" && selected && (
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[11px] text-green-primary bg-green-light border border-green-border px-2.5 py-0.5 rounded-full">
-              {selected}
-            </span>
+        {subTab === "mine" && (selected || outOnly) && (
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            {selected && (
+              <span className="text-[11px] text-green-primary bg-green-light border border-green-border px-2.5 py-0.5 rounded-full">
+                {selected}
+              </span>
+            )}
+            {outOnly && (
+              <span className="text-[11px] text-green-primary bg-green-light border border-green-border px-2.5 py-0.5 rounded-full">
+                Not in automatic planning
+              </span>
+            )}
             <button
-              onClick={() => setSelected(null)}
+              onClick={() => {
+                setSelected(null);
+                setOutOnly(false);
+              }}
               className="text-[11px] text-text-muted hover:text-text-main transition-colors"
             >
               Clear
@@ -239,7 +275,7 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
           </div>
         )}
 
-        <RecipeGrid recipes={displayed} />
+        <RecipeGrid recipes={displayed} inPlanningOf={inPlanningOf} />
       </div>
 
       {/* Scroll indicator */}
@@ -453,6 +489,26 @@ export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSa
             ))
           )}
         </div>
+
+        {/* The recipes kept out of automatic planning, to switch them back on (D37). Hidden when
+            there are none, or before the switches' state is read. */}
+        {outCount > 0 && (
+          <div className="border-t border-[rgba(0,0,0,0.07)] py-2 flex-shrink-0">
+            <button
+              onClick={() => {
+                setOutOnly((o) => !o);
+                setPanelOpen(false);
+              }}
+              className={`w-full text-left px-4 py-2.5 text-[13px] transition-colors ${
+                outOnly
+                  ? "text-green-primary bg-green-light font-medium"
+                  : "text-text-main hover:bg-warm"
+              }`}
+            >
+              Not in automatic planning <span className="text-text-muted font-normal">({outCount})</span>
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

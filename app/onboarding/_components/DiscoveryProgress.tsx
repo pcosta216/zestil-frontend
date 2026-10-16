@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Check, LoaderCircle, X } from "@/lib/icons";
+import { DiscoveryItems, RequestIcon, type DiscoveryItem } from "@/components/DiscoveryItems";
 
 // The last onboarding screen. Replaces the old "You're all set" panel, which handed the user a
 // "Go to my plan" button straight into an empty plan — recipe discovery is still running at that
@@ -22,26 +22,6 @@ const AUTO_CONTINUE_MS = 15000; // after completion, not from mount
  */
 const IDLE_POLLS_BEFORE_ESCAPE = 18;
 
-/** One recipe the job kept for a request. */
-interface DiscoveryRecipe {
-  uuid?: string;
-  title?: string;
-  saved?: boolean;
-}
-
-/** One request the job searched for. Every field but `name` can be absent mid-run. */
-interface DiscoveryItem {
-  name?: string;
-  type?: string; // "fill" marks the top-up bucket ("More recipes for you")
-  status?: string;
-  error?: string; // only on a failure, e.g. "Explore failed: The operation was aborted due to timeout"
-  found?: number;
-  saved?: number;
-  accepted?: number;
-  rejected?: number;
-  recipes?: DiscoveryRecipe[];
-}
-
 interface OnboardingBlock {
   status?: { time?: string; current?: string }[];
   recipe_discovery?: DiscoveryItem[];
@@ -57,65 +37,6 @@ function currentStatus(block: OnboardingBlock | null): string | undefined {
   const entries = (block?.status ?? []).filter((s) => typeof s?.current === "string");
   if (entries.length === 0) return undefined;
   return [...entries].sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? ""))).at(-1)?.current;
-}
-
-/**
- * Normalised per-request state.
- *
- * Only "complete" and "failed" have been observed live; "in progress" and "waiting" come from
- * the spec and are unverified, so case and separators are normalised before matching rather
- * than the exact strings being trusted. An unrecognised value reads as waiting — the neutral
- * state, never a false green tick.
- */
-type RequestState = "complete" | "failed" | "running" | "waiting";
-function requestState(status: string | undefined): RequestState {
-  const s = String(status ?? "").trim().toLowerCase().replace(/[\s_-]+/g, "");
-  if (s === "complete" || s === "completed") return "complete";
-  if (s === "failed" || s === "fail" || s === "error") return "failed";
-  if (s === "inprogress" || s === "running" || s === "started") return "running";
-  return "waiting";
-}
-
-/**
- * The leading marker on a REQUEST row ("pasta carbonara", "risotto").
- *
- * A completed request gets no mark of its own: what it produced is the recipes listed beneath
- * it, and each of those carries its own tick. Marking both would say "done" twice and make a
- * request that completed with nothing look identical to one that found two dishes. The slot is
- * still rendered so every row's name starts at the same x.
- */
-function RequestIcon({ state }: { state: RequestState }) {
-  if (state === "failed") {
-    return (
-      <span className="shrink-0 w-5 h-5 rounded-full bg-red-600 flex items-center justify-center" aria-label="failed">
-        <X size={13} strokeWidth={3} className="text-white" />
-      </span>
-    );
-  }
-  if (state === "running") {
-    return (
-      <span className="shrink-0 w-5 h-5 flex items-center justify-center" aria-label="in progress">
-        <LoaderCircle size={18} className="text-green-primary animate-spin" />
-      </span>
-    );
-  }
-  if (state === "waiting") {
-    return (
-      <span className="shrink-0 w-5 h-5 flex items-center justify-center" aria-label="waiting">
-        <span className="w-2.5 h-2.5 rounded-full border-2 border-[rgba(0,0,0,0.18)]" />
-      </span>
-    );
-  }
-  return <span className="shrink-0 w-5 h-5" aria-hidden="true" />;
-}
-
-/** "17 found · 2 saved" — only the parts the job has actually reported. */
-function countLine(item: DiscoveryItem): string | null {
-  const parts: string[] = [];
-  if (typeof item.found === "number") parts.push(`${item.found} found`);
-  const saved = item.saved ?? item.accepted;
-  if (typeof saved === "number") parts.push(`${saved} saved`);
-  return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export function DiscoveryProgress({ onContinue }: { onContinue: () => void }) {
@@ -232,61 +153,7 @@ export function DiscoveryProgress({ onContinue }: { onContinue: () => void }) {
           </p>
         )}
 
-        {items.length > 0 && (
-          <ul className="flex flex-col gap-2 mb-6">
-            {items.map((item, i) => {
-              const state = requestState(item.status);
-              const counts = countLine(item);
-              const recipes = (item.recipes ?? []).filter((r) => typeof r.title === "string" && r.title.length > 0);
-              return (
-                <li
-                  key={`${item.name ?? "request"}:${i}`}
-                  className="rounded-xl border border-[rgba(0,0,0,0.08)] bg-white px-4 py-3"
-                >
-                  {/* The request the job was given — a header for the recipes it produced. */}
-                  <div className="flex items-center gap-3">
-                    <RequestIcon state={state} />
-                    <span className="text-sm text-text-main flex-1 min-w-0 truncate">{item.name ?? "Recipes"}</span>
-                    {counts && <span className="text-[11px] text-text-muted shrink-0">{counts}</span>}
-                  </div>
-
-                  {/* What matched it. The tick is trailing and belongs to the RECIPE: it marks
-                      this dish as found and saved, which is the thing that actually happened. */}
-                  {recipes.length > 0 && (
-                    <ul className="mt-2 pl-8 flex flex-col gap-1.5">
-                      {recipes.map((recipe, r) => (
-                        <li key={recipe.uuid ?? `${recipe.title}:${r}`} className="flex items-start gap-2">
-                          <span className="text-xs text-text-muted leading-snug flex-1 min-w-0">{recipe.title}</span>
-                          {recipe.saved === true && (
-                            <span
-                              className="shrink-0 w-4 h-4 mt-px rounded-full bg-green-primary flex items-center justify-center"
-                              aria-label="saved"
-                            >
-                              <Check size={10} strokeWidth={3} className="text-white" />
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-
-                  {/* The job's own words when it failed — far more use than copy we invent. */}
-                  {state === "failed" && (
-                    <p className="mt-1.5 pl-8 text-xs text-text-muted leading-snug">
-                      {item.error ?? "Nothing usable came back for this one."}
-                    </p>
-                  )}
-
-                  {/* Completed, but nothing matched. Without this the row is a bare name and
-                      reads as still-pending. */}
-                  {state === "complete" && recipes.length === 0 && (
-                    <p className="mt-1.5 pl-8 text-xs text-text-muted">No matches saved for this one.</p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        )}
+        {items.length > 0 && <DiscoveryItems items={items} />}
 
         <button
           type="button"

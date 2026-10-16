@@ -2,11 +2,14 @@
 
 Status: live · Last verified: 2026-09-30
 Component: `app/zestil/SavedTab.tsx` (mounted by `app/zestil/AppShell.tsx`) · Cards:
-`components/RecipeGrid.tsx`, `components/RecipeCard.tsx`, `components/RecipeCardEmpty.tsx`
+`components/RecipeGrid.tsx`, `components/RecipeCard.tsx` · Planning state:
+`app/zestil/useRecipePlanning.ts`, `lib/recipe-planning.ts`
 Verify: no seed/browser script yet — manually check via `/zestil?tab=saved` against an account with
 recipes in more than one collection, plus a **separate** check of the Add-recipe flow. Any account
 created since 2026-09-30 can demonstrate that flow (`doe@gmail.com` holds the 11 defaults); an
-older one may hold no collections at all — see Exceptions
+older one may hold no collections at all — see Exceptions. The planning triangle and filter need an
+account with a recipe kept out of planning; so far they have only been rendered with fixture data,
+never against a live account
 
 One of five tabs in `AppShell` (`NAV_ITEMS`, `AppShell.tsx:110-160`). Like Plan and Explore, it's
 client tab state toggled with a `hidden` class (`AppShell.tsx:69-71`), not a route of its own —
@@ -51,13 +54,26 @@ the book icon, `"mine"`-only.
 `query` (the search box) substring-matches `meal_title`, case-insensitive. Both run client-side
 against the full in-memory `recipes` list, no debounce, no server round-trip. The result is deduped
 by `recipe_uuid` last — a recipe that's in more than one collection, and so appears once per
-collection in the underlying view, only shows once when no collection filter is active.
+collection in the underlying view, only shows once when no collection filter is active. The panel's
+last entry, "Not in automatic planning (N)", is a second filter (`outOnly`) that combines with the
+collection: only the recipes kept out of planning. It shows only when N > 0. The chips above the
+grid show both filters with one Clear, and `outOnly` clears itself when the last such recipe is
+switched back on.
 
-**Rendering.** `displayed` (`"recent"`'s fixed list, or `"mine"`'s search + filter applied) is
-passed to `RecipeGrid` (`SavedTab.tsx:222`), which renders one `RecipeCard` per result plus a
-trailing `RecipeCardEmpty` tile, or its own empty state if `displayed` is empty (see Exceptions —
-that empty state doesn't distinguish "no recipes at all" from "no matches"). `RecipeCard` links to
-`/zestil/[uuid]` (`components/RecipeCard.tsx:34`).
+**Rendering.** `displayed` (`"recent"`'s fixed list, or `"mine"`'s search + filters applied) is
+passed to `RecipeGrid`, which renders one `RecipeCard` per result, or its own empty state if
+`displayed` is empty (see Exceptions — that empty state doesn't distinguish "no recipes at all"
+from "no matches"). `RecipeCard` links to `/zestil/[uuid]`.
+
+**Planning triangle** (D37, agents repo `docs/FRONTEND_RECIPE_PLANNING_EXCLUSIONS.md`). Every card,
+on both sub-tabs, has a triangle in its photo's top-left corner (20% of the photo's height) showing
+whether the recipe is used in automatic planning and chat suggestions, in the planning switch's
+colours: green on, grey off (kept out by the user, a strict diet, or both), white until the state
+is read. The switch itself is on the recipe page ([recipe_detail.md](./recipe_detail.md)). The
+state is read from `tbl_user_recipes_exclusions` (`recipe_uuid, reason`; RLS returns the user's own
+rows): a recipe with any row is off. It is read when the tab is shown, when `recipes` changes, and
+when the rows change elsewhere (`announcePlanningChanged`: the recipe page's switch, the diet
+banner's answer), never cached for the session, because chat changes the same rows.
 
 **Scroll thumb** (`SavedTab.tsx:131-154`): a custom scrollbar indicator recomputed from
 `scrollTop`/`scrollHeight`/`clientHeight` on every scroll/resize and whenever `displayed` changes;
@@ -113,12 +129,6 @@ the account's full set (`SavedTab.tsx:222`). Searching for something that doesn'
 picking a collection with nothing currently in it, shows the same "Your saved recipes will appear
 here once you add them to a collection" copy as having saved nothing at all.
 
-**The `RecipeCardEmpty` grid tile still does nothing.** `RecipeGrid` renders `<RecipeCardEmpty />`
-with no `onClick` (`components/RecipeGrid.tsx:27`), even though the component accepts one
-(`components/RecipeCardEmpty.tsx:5`) — same shape as Plan tab's dead `+ Dinner`/`+ Lunch`/`+ Snack`
-chips ([plan_tab.md](../plan_tab.md#exceptions-gotchas)). The floating add button above is the only
-working entry point into the Add-recipe flow; this tile is unrelated to it and remains a dead end.
-
 **The collections panel filters out `"main"`; the recipe detail page doesn't.** `SavedTab.tsx:95`
 drops any collection literally named `"main"` from the filter list. `getRecipe`
 (`lib/supabase/queries.ts:97-115`), used by [recipe_detail.md](./recipe_detail.md), builds
@@ -132,6 +142,7 @@ Saved's own panel would never let you select.
 - `tbl_collections_set_header` — via `getCollections` (`lib/supabase/queries.ts:57-68`), passed
   through `AppShell` as the `collections` prop, used only to find `"main"`'s id (see Exceptions)
 - The [recipe-parser](../../recipe-parser/SPEC.md) backend, via `/api/recipe/submit`
+- `tbl_user_recipes_exclusions` — read directly for the planning triangles and the filter
 
 ## Writes
 

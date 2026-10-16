@@ -9,6 +9,7 @@ import { SavedTab } from "./SavedTab";
 import { ProfileTab } from "./ProfileTab";
 import { InstallBanner } from "@/components/InstallBanner";
 import { UserAvatar } from "@/components/UserAvatar";
+import { DietHost } from "@/components/DietHost";
 import type { RecipeCollection, Collection, UserProfile } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
@@ -49,6 +50,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
       <InstallBanner />
+      <DietHost userId={user.id} onRecipesChanged={refreshRecipes} />
       {pickingRecipes && (
         <div role="status" className="px-5 py-2 text-[12px] font-medium text-green-primary bg-green-light border-b border-green-border">
           Picking recipes for you…
@@ -81,7 +83,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
           <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <SavedTab recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
+          <SavedTab active={activeTab === "saved"} recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <ProfileTab profile={profile} fallbackEmail={user.email} />

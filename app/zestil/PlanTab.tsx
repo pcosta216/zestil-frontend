@@ -9,6 +9,7 @@ import { stopSuggestingFor } from "@/lib/stop-suggesting";
 import { IngredientCard } from "@/components/IngredientCard";
 import { WeekdayGrid, type MacroData } from "@/components/WeekdayGrid";
 import { createClient } from "@/lib/supabase/browser";
+import { announceDietSearch, announceItemSaved } from "@/lib/diet";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
 import { hasBodyText, parseUiBody, type UiBody } from "@/lib/ui-body";
@@ -725,6 +726,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
       };
 
       setMessages((prev) => [...prev, agentMsg]);
+      announceDietSearch(data.recipe_search);
 
       // If the agent changed the day the user is following, append a fresh block for it below the
       // reply so the transcript ends on its current state. A turn that only shows a day ("show me
@@ -956,6 +958,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                                   setSaved((prev) => new Set(prev).add(msg.id));
                                   setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
                                   showBanner({ type: "success", message: recipeUuid ?  "We're cooking the data — we'll let you know when it's ready" : "Recipe added to your collection!"});
+                                  announceItemSaved("recipe", savedUuid);
                                   onRecipeSaved?.();
                                 } catch {
                                   setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });

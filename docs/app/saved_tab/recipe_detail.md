@@ -3,9 +3,12 @@
 Status: live · Last verified: 2026-09-29
 Component: `app/zestil/[id]/page.tsx`, `app/zestil/[id]/BackButton.tsx` · Shared hero:
 `components/RecipeDetailHero.tsx` (also reused, `asOverlay`, by Plan tab's "View Recipe" overlay —
-`components/WeekdayRecipeCard.tsx:152`)
+`components/WeekdayRecipeCard.tsx:152`) · Planning switch: `components/PlanningSwitch.tsx`,
+`lib/recipe-planning.ts`
 Verify: no seed/browser script yet — manually check by opening a card from
-[saved_tab.md](./saved_tab.md) and using Delete Recipe
+[saved_tab.md](./saved_tab.md) and using Delete Recipe. The planning switch has been checked only on
+a preview page whose Supabase calls were answered by Playwright (on, "Not keto" without a link, a
+flip, a failed flip), never against a live account (it writes `tbl_user_recipes_exclusions`)
 
 Reached from a `RecipeCard` link (`components/RecipeCard.tsx:34`, `/zestil/[uuid]`) in Saved, or
 wherever else a `recipe_uuid` is known. It's a standalone route, not client tab state like
@@ -25,10 +28,30 @@ session, this page never checks `user` before using it — `user!.id`
 
 **Rendering** (`components/RecipeDetailHero.tsx`): title, hero image (falls back to a plate emoji
 if `image_url` fails `isValidUrl` — no runtime `onError` fallback the way `RecipeCard` has),
-author/date, prep/total time and servings badges, an optional "View original recipe" link,
-ingredients, instructions grouped by `instruction.title` (e.g. "Prep"/"Cook"), collection badges
-(`collection_names`, unfiltered — see Exceptions), and a per-serving macro row
-(kcal/protein/carbs/fat/sugar/sodium), each value divided by `servings_value || 1`.
+author/date, prep/total time and servings badges, an optional "View original recipe" link with the
+planning switch to its right (below), ingredients, instructions grouped by `instruction.title`
+(e.g. "Prep"/"Cook"), collection badges (`collection_names`, unfiltered — see Exceptions), and a
+per-serving macro row (kcal/protein/carbs/fat/sugar/sodium), each value divided by
+`servings_value || 1`.
+
+**Planning switch** (D37, agents repo `docs/FRONTEND_RECIPE_PLANNING_EXCLUSIONS.md`): "Auto-plan",
+on when the recipe is used in automatic planning and chat suggestions. It sits right of "View
+original recipe", or alone in that row when the recipe has no `url`; both are 27.6px tall
+(`ROW_HEIGHT`). It shows once its state is read: the recipe's rows in `tbl_user_recipes_exclusions`
+(RLS returns the user's own), read when the page opens and again on `announcePlanningChanged`. Any
+row means off. A recipe kept out only by a strict diet (`diet:keto`, no `user` row) shows "Not
+keto" in amber in place of "Auto-plan", from `tbl_diet_rules.label`, as the database words it. It
+shows on the Plan tab's overlay too.
+
+Flipping it calls `set_recipe_planning`, with `p_account_key` from the session, since the overlay
+has no user id to hand down. The switch moves at once and is disabled until the reply; `ok: false`
+or an error puts it back and shows a red banner (the reply's `message` when it has one). Success
+shows a green banner: "… won't be used in automatic planning. You can still add it to a day
+yourself.", "… is back in automatic planning.", or, when a diet kept it out, "…, even though it's
+not keto." Switching on removes every row, the diet's too, and the database records that as an
+override of the diet. Then `announcePlanningChanged` makes this page and the Saved tab's triangles
+read again. The banner is the tabs' save banner, at `z-[70]` so it shows above the collection picker
+and inside the overlay.
 
 **Back** (`BackButton.tsx`): `router.back()`, not a link to `/zestil?tab=saved` — arriving here
 from somewhere other than Saved (e.g. an Explore chat result) goes back the way you came, not
@@ -75,8 +98,11 @@ center number is real.
 - `viw_user_collection_set` — via `getRecipe` (`lib/supabase/queries.ts:97-115`)
 - `tbl_collections_line` — read indirectly through the view; written by the delete below and by
   the save flows in [plan_tab.md](../plan_tab.md#behaviour)
+- `tbl_user_recipes_exclusions` — the recipe's rows, for the planning switch
+- `tbl_diet_rules` — `diet, label`, for "Not keto"
 
 ## Writes
 
 - `DELETE /api/recipe/[uuid]` — deletes every `tbl_collections_line` row for `recipe_uuid` +
   `account_key` (`app/api/recipe/[uuid]/route.ts:19-36`); see Exceptions above
+- `set_recipe_planning` (RPC, the user's JWT) — the planning switch

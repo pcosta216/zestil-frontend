@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import Markdown from "react-markdown";
 import remarkBreaks from "remark-breaks";
 import { createClient } from "@/lib/supabase/browser";
+import { announceDietSearch, announceItemSaved } from "@/lib/diet";
 import { Heart } from "@/lib/icons";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 
@@ -245,6 +246,7 @@ export function ExploreTab({ collections: rawCollections = [], onRecipeSaved, on
       };
 
       setMessages((prev) => [...prev, agentMsg]);
+      announceDietSearch(data.recipe_search);
       apiHistory.current.push({ role: "agent", content: agentMsg.content });
       if (quick_replies?.length) setQuickReplies(quick_replies);
     } catch (err) {
@@ -405,6 +407,7 @@ export function ExploreTab({ collections: rawCollections = [], onRecipeSaved, on
                                     setSaved((prev) => new Set(prev).add(msg.id));
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });
                                     showBanner({ type: "success", message: recipeUuid ?  "We're cooking the data — we'll let you know when it's ready" :"Recipe added to your collection!" });
+                                    announceItemSaved("recipe", savedUuid);
                                     onRecipeSaved?.();
                                   } catch {
                                     setHearted((prev) => { const next = new Set(prev); next.delete(msg.id); return next; });

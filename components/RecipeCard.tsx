@@ -10,9 +10,11 @@ import { isValidUrl, formatTime } from "@/lib/recipe-format";
 
 interface Props {
   recipe: RecipeCollection;
+  /** Whether the recipe is used in automatic planning (D37); undefined until that is read. */
+  inPlanning?: boolean;
 }
 
-export function RecipeCard({ recipe }: Props) {
+export function RecipeCard({ recipe, inPlanning }: Props) {
   const initial = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
 
   const [imageSrc, setImageSrc] = useState<string | null>(initial);
@@ -26,7 +28,7 @@ export function RecipeCard({ recipe }: Props) {
       <Link href={`/zestil/${recipe.recipe_uuid}`}>
         <div className="relative bg-white border border-[rgba(0,0,0,0.07)] rounded-2xl overflow-hidden hover:border-green-border transition-colors cursor-pointer group h-48">
           {/* Photo */}
-          <div className="w-full h-28 bg-green-light flex items-center justify-center overflow-hidden">
+          <div className="relative w-full h-28 bg-green-light flex items-center justify-center overflow-hidden">
             {imageSrc ? (
               <Image
                 src={imageSrc}
@@ -42,6 +44,18 @@ export function RecipeCard({ recipe }: Props) {
             ) : (
               <ImageOff size={40} strokeWidth={1.0} className="text-text-muted" aria-hidden="true" />
             )}
+            {/* Top-left corner triangle: 20% of the photo's height, as wide as it is tall. It shows the
+                recipe page's planning switch's state in the switch's colours: green on, grey off,
+                white until it's read. */}
+            <svg
+              viewBox="0 0 1 1"
+              aria-hidden="true"
+              className={`absolute top-0 left-0 h-[20%] aspect-square transition-colors ${
+                inPlanning === undefined ? "text-white" : inPlanning ? "text-green-primary" : "text-gray-300"
+              }`}
+            >
+              <polygon points="0,0 1,0 0,1" fill="currentColor" />
+            </svg>
           </div>
 
           {/* Info */}

@@ -4,7 +4,7 @@ import { useId, useState, type ComponentType, type ReactNode } from "react";
 import { callEdge } from "@/lib/edge-call";
 import { MacroRings } from "@/components/MacroRings";
 import { MiniMarkdown } from "@/components/MiniMarkdown";
-import { CARD, CELL, GROUP_COLS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, TONES } from "@/components/ui-style";
+import { CARD, CELL, GROUP_COLS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, SwitchTrack, TONES } from "@/components/ui-style";
 import { ArrowLeftRight, Ban, Check, ChevronDown, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
 import {
   ROOT_SCOPE, applyBlocks, applyReplace, applyRevert, findNutrition, groupScope, isAllowedCall, previousOf,
@@ -224,9 +224,7 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
           }}
           className={`${CELL} ${PILL_SECONDARY}`}
         >
-          <span className={`relative inline-block w-[26px] h-[14px] rounded-full transition-colors ${checked ? "bg-green-primary" : "bg-gray-300"}`}>
-            <span className={`absolute top-[2px] left-[2px] w-[10px] h-[10px] rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[12px]" : ""}`} />
-          </span>
+          <SwitchTrack on={checked} />
           {btn.caption}
         </button>
       );
