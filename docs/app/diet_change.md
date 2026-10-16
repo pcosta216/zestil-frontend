@@ -51,7 +51,7 @@ Two screens, one host. The chats and save paths only announce what happened (win
 ## Why a recipe is off
 
 The recipe page carries the planning switch (D37; [recipe_detail.md](./saved_tab/recipe_detail.md)).
-A recipe kept out only by the strict diet shows "Not keto" on it, from its `diet:keto` row and
-`tbl_diet_rules.label`; its Saved tab card's triangle is grey
-([saved_tab.md](./saved_tab/saved_tab.md)). The banner's answer for a recipe (`set_diet_planning`)
-fires `announcePlanningChanged`, so both read the state again.
+A recipe kept out only by the strict diet shows "Not keto" on it, from the recipe's `auto_reason`
+(`viw_user_collection_set`); its Saved tab card's triangle is grey (`auto_plan` false,
+[saved_tab.md](./saved_tab/saved_tab.md)). The banner's answer for a recipe (`set_diet_planning`)
+fires `announcePlanningChanged`, so `AppShell` reads the recipes' `auto_plan` again.

@@ -38,7 +38,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
     (c) => c.name.toLowerCase() !== "main" && !collectionNames.includes(c.name)
   );
   const imageUrl = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
-  const planning = useRecipePlanningSwitch(recipe.recipe_uuid, recipe.meal_title);
+  const planning = useRecipePlanningSwitch(recipe.recipe_uuid, recipe.meal_title, recipe.auto_plan, recipe.auto_reason);
 
   async function handleDelete() {
     setDeleting(true);
@@ -142,8 +142,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
 
 
 
-        {/* Source link, with the planning switch to its right (on its own when there's no link). The
-            switch shows once its state is read. */}
+        {/* Source link, with the planning switch to its right (on its own when there's no link). */}
         {(recipe.url || planning.ready) && (
           <div className="flex items-center gap-2 flex-wrap">
             {recipe.url && (

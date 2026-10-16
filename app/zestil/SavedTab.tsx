@@ -6,11 +6,8 @@ import type { RecipeCollection } from "@/lib/supabase/queries";
 import { BookOpenText, Search, Plus } from "@/lib/icons";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { announceItemSaved } from "@/lib/diet";
-import { useRecipePlanning } from "./useRecipePlanning";
 
 interface Props {
-  /** The Saved tab is the one on screen: the planning state is read again each time it is. */
-  active: boolean;
   recipes: RecipeCollection[];
   collections?: { id: number; name: string }[];
   onRecipeSaved?: () => void;
@@ -35,7 +32,7 @@ function parseRecipeInput(raw: string): { url: string } | { text: string } {
   return { text: trimmed };
 }
 
-export function SavedTab({ active, recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
+export function SavedTab({ recipes, collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: Props) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [thumb, setThumb] = useState<{ top: number; height: number } | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
@@ -52,7 +49,6 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
   const [createDirty, setCreateDirty] = useState(false);
   const [banner, setBanner] = useState<{ type: "success" | "info" | "error"; message: string } | null>(null);
   const bannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const planning = useRecipePlanning(active, recipes);
 
   // Same filter Explore/Plan apply to their own collections checklist — "main" is where an
   // unassigned recipe already lives by default, so it isn't offered as a pick here either.
@@ -144,8 +140,7 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
 
     let filtered = recipes;
     if (selected) filtered = filtered.filter((r) => r.collections_short_desc === selected);
-    const out = planning.state;
-    if (outOnly && out) filtered = filtered.filter((r) => out.has(r.recipe_uuid));
+    if (outOnly) filtered = filtered.filter((r) => r.auto_plan === false);
     if (query.trim()) {
       const q = query.toLowerCase();
       filtered = filtered.filter((r) => r.meal_title?.toLowerCase().includes(q) ?? false);
@@ -156,23 +151,19 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
       seen.add(r.recipe_uuid);
       return true;
     });
-  }, [recipes, selected, outOnly, planning.state, query, subTab, recentRecipes]);
+  }, [recipes, selected, outOnly, query, subTab, recentRecipes]);
 
   // Saved recipes kept out of automatic planning, each counted once (the view repeats a recipe per collection).
-  const outCount = useMemo(() => {
-    const out = planning.state;
-    return out ? new Set(recipes.map((r) => r.recipe_uuid).filter((u) => out.has(u))).size : 0;
-  }, [recipes, planning.state]);
+  const outCount = useMemo(
+    () => new Set(recipes.filter((r) => r.auto_plan === false).map((r) => r.recipe_uuid)).size,
+    [recipes]
+  );
 
   // The last one switched back on: the filter would show nothing, under "No recipes yet".
   useEffect(() => {
     if (outOnly && outCount === 0) setOutOnly(false);
   }, [outOnly, outCount]);
 
-  // Undefined until the state is read: a guessed "on" would be wrong for every recipe kept out.
-  function inPlanningOf(recipe: RecipeCollection): boolean | undefined {
-    return planning.state ? !planning.state.has(recipe.recipe_uuid) : undefined;
-  }
 
   const updateThumb = useCallback(() => {
     const el = scrollRef.current;
@@ -275,7 +266,7 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
           </div>
         )}
 
-        <RecipeGrid recipes={displayed} inPlanningOf={inPlanningOf} />
+        <RecipeGrid recipes={displayed} />
       </div>
 
       {/* Scroll indicator */}
@@ -491,7 +482,7 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
         </div>
 
         {/* The recipes kept out of automatic planning, to switch them back on (D37). Hidden when
-            there are none, or before the switches' state is read. */}
+            there are none. */}
         {outCount > 0 && (
           <div className="border-t border-[rgba(0,0,0,0.07)] py-2 flex-shrink-0">
             <button

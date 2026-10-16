@@ -10,11 +10,9 @@ import { isValidUrl, formatTime } from "@/lib/recipe-format";
 
 interface Props {
   recipe: RecipeCollection;
-  /** Whether the recipe is used in automatic planning (D37); undefined until that is read. */
-  inPlanning?: boolean;
 }
 
-export function RecipeCard({ recipe, inPlanning }: Props) {
+export function RecipeCard({ recipe }: Props) {
   const initial = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
 
   const [imageSrc, setImageSrc] = useState<string | null>(initial);
@@ -44,14 +42,14 @@ export function RecipeCard({ recipe, inPlanning }: Props) {
             ) : (
               <ImageOff size={40} strokeWidth={1.0} className="text-text-muted" aria-hidden="true" />
             )}
-            {/* Top-left corner triangle: 20% of the photo's height, as wide as it is tall. It shows the
-                recipe page's planning switch's state in the switch's colours: green on, grey off,
-                white until it's read. */}
+            {/* Top-left corner triangle: 20% of the photo's height, as wide as it is tall. It shows
+                `auto_plan`, the recipe page's planning switch, in the switch's colours: green on, grey
+                off, white if the view gave no value. */}
             <svg
               viewBox="0 0 1 1"
               aria-hidden="true"
               className={`absolute top-0 left-0 h-[20%] aspect-square transition-colors ${
-                inPlanning === undefined ? "text-white" : inPlanning ? "text-green-primary" : "text-gray-300"
+                recipe.auto_plan == null ? "text-white" : recipe.auto_plan ? "text-green-primary" : "text-gray-300"
               }`}
             >
               <polygon points="0,0 1,0 0,1" fill="currentColor" />

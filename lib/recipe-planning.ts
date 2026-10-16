@@ -7,38 +7,25 @@ import { createClient } from "@/lib/supabase/browser";
 // A recipe is out of planning while it has a row in tbl_user_recipes_exclusions. `reason` is 'user' (the
 // switch, or chat's "don't plan the coq au vin") or 'diet:<diet>' (the user's strict diet keeps it out);
 // a recipe can have both. Switching it on removes every row, the diet's too, and the database remembers
-// that as an override of the diet. Chat changes the same rows, so the state is read whenever a recipe or
-// the Saved tab is shown, never cached for the session.
+// that as an override of the diet.
+//
+// The app never reads the table: viw_user_collection_set follows it at once, and the recipes carry its
+// auto_plan (in planning or not) and auto_reason (the diet, when only a diet keeps the recipe out) from
+// the server. loadAutoPlan reads just auto_plan again.
 
-/** recipe_uuid → why it is out ('user', 'diet:keto'). A recipe that isn't in the map is in planning. */
-export type PlanningState = Map<string, string[]>;
-
-export async function loadPlanningState(): Promise<PlanningState> {
-  // Row-level security returns only the user's own rows.
-  const { data, error } = await createClient().from("tbl_user_recipes_exclusions").select("recipe_uuid, reason");
-  if (error) throw new Error(error.message);
-  const state: PlanningState = new Map();
-  for (const row of (data ?? []) as { recipe_uuid: string; reason: string | null }[]) {
-    state.set(row.recipe_uuid, [...(state.get(row.recipe_uuid) ?? []), row.reason ?? "user"]);
-  }
-  return state;
-}
-
-/** Why one recipe is out ('user', 'diet:keto'); empty when it is in planning. */
-export async function loadRecipeReasons(recipeUuid: string): Promise<string[]> {
+/** recipe_uuid → auto_plan, read again from the view (chat changes the rows too). */
+export async function loadAutoPlan(accountKey: string): Promise<Map<string, boolean>> {
+  // Filtered by account, as getRecipes reads the view.
   const { data, error } = await createClient()
-    .from("tbl_user_recipes_exclusions")
-    .select("reason")
-    .eq("recipe_uuid", recipeUuid);
+    .from("viw_user_collection_set")
+    .select("recipe_uuid, auto_plan")
+    .eq("account_key", accountKey);
   if (error) throw new Error(error.message);
-  return ((data ?? []) as { reason: string | null }[]).map((r) => r.reason ?? "user");
-}
-
-/** diet → its label ("keto" → "Keto"), for "not keto". Readable by any signed-in user. */
-export async function loadDietLabels(): Promise<Map<string, string>> {
-  const { data, error } = await createClient().from("tbl_diet_rules").select("diet, label");
-  if (error) throw new Error(error.message);
-  return new Map(((data ?? []) as { diet: string; label: string }[]).map((r) => [r.diet, r.label]));
+  const autoPlan = new Map<string, boolean>();
+  for (const row of (data ?? []) as { recipe_uuid: string; auto_plan: boolean | null }[]) {
+    if (typeof row.auto_plan === "boolean") autoPlan.set(row.recipe_uuid, row.auto_plan);
+  }
+  return autoPlan;
 }
 
 export interface SetRecipePlanning {
@@ -65,15 +52,19 @@ export async function setRecipePlanning(recipeUuid: string, inPlanning: boolean)
   return data as SetRecipePlanning;
 }
 
-/** "not keto" when a diet keeps the recipe out, the way the database words it ('not ' || lower(label)). */
-export function dietReason(reasons: string[] | undefined, labels: Map<string, string>): string | null {
-  const diet = reasons?.find((r) => r.startsWith("diet:"))?.slice("diet:".length);
-  return diet ? `not ${(labels.get(diet) ?? diet).toLowerCase()}` : null;
+/**
+ * "not keto" from a recipe's auto_reason ("keto"; a raw "diet:keto" reads the same), null when there is
+ * none. The database words it 'not ' || lower(label): every diet's label is its name capitalised, bar
+ * "Balanced", which keeps nothing out, so the name gives the same words without reading tbl_diet_rules.
+ */
+export function dietReason(autoReason: string | null | undefined): string | null {
+  const diet = autoReason?.trim().replace(/^diet:/, "");
+  return diet && diet !== "user" ? `not ${diet.toLowerCase()}` : null;
 }
 
 // ── events ─────────────────────────────────────────────────────────────────────────────────
-// The recipe page's switch and the diet alert's answer (DietHost) write the rows, so they tell whoever
-// shows them (the Saved tab, an open recipe page) to read them again.
+// The recipe page's switch and the diet alert's answer (DietHost) write the rows, so they tell AppShell
+// to read the recipes' auto_plan again.
 
 const CHANGED_EVENT = "zestil:recipe-planning-changed";
 

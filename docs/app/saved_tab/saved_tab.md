@@ -2,8 +2,8 @@
 
 Status: live · Last verified: 2026-09-30
 Component: `app/zestil/SavedTab.tsx` (mounted by `app/zestil/AppShell.tsx`) · Cards:
-`components/RecipeGrid.tsx`, `components/RecipeCard.tsx` · Planning state:
-`app/zestil/useRecipePlanning.ts`, `lib/recipe-planning.ts`
+`components/RecipeGrid.tsx`, `components/RecipeCard.tsx` · Planning state: `auto_plan` on the
+recipes, read again by `app/zestil/AppShell.tsx` (`refreshAutoPlan`, `lib/recipe-planning.ts`)
 Verify: no seed/browser script yet — manually check via `/zestil?tab=saved` against an account with
 recipes in more than one collection, plus a **separate** check of the Add-recipe flow. Any account
 created since 2026-09-30 can demonstrate that flow (`doe@gmail.com` holds the 11 defaults); an
@@ -68,12 +68,18 @@ from "no matches"). `RecipeCard` links to `/zestil/[uuid]`.
 **Planning triangle** (D37, agents repo `docs/FRONTEND_RECIPE_PLANNING_EXCLUSIONS.md`). Every card,
 on both sub-tabs, has a triangle in its photo's top-left corner (20% of the photo's height) showing
 whether the recipe is used in automatic planning and chat suggestions, in the planning switch's
-colours: green on, grey off (kept out by the user, a strict diet, or both), white until the state
-is read. The switch itself is on the recipe page ([recipe_detail.md](./recipe_detail.md)). The
-state is read from `tbl_user_recipes_exclusions` (`recipe_uuid, reason`; RLS returns the user's own
-rows): a recipe with any row is off. It is read when the tab is shown, when `recipes` changes, and
-when the rows change elsewhere (`announcePlanningChanged`: the recipe page's switch, the diet
-banner's answer), never cached for the session, because chat changes the same rows.
+colours: green on, grey off (kept out by the user, a strict diet, or both). The switch itself is on
+the recipe page ([recipe_detail.md](./recipe_detail.md)). The state is each recipe row's `auto_plan`
+from `viw_user_collection_set`, which follows `tbl_user_recipes_exclusions` at once (false while the
+recipe has a row there). It comes with the recipes (`getRecipes`, `/api/recipes`), so the triangles
+have their colour in the first HTML with no read of their own; `RecipeCard` reads it from the row,
+and the filter is `auto_plan === false`. Chat, the recipe page's switch and the diet banner change it
+after the recipes were read, so `AppShell` reads just `recipe_uuid, auto_plan` from the view again
+(`loadAutoPlan`, filtered by account like `getRecipes`) and merges it into the recipes: on each show
+of the Saved tab, except the first show of a load the server just rendered, and on
+`announcePlanningChanged` (the switch on the Plan tab's overlay, the diet banner's answer). Back from
+a recipe page reuses the cached page, recipes and all, so that show reads too. A triangle is white
+only when the view gives no value.
 
 **Scroll thumb** (`SavedTab.tsx:131-154`): a custom scrollbar indicator recomputed from
 `scrollTop`/`scrollHeight`/`clientHeight` on every scroll/resize and whenever `displayed` changes;
@@ -142,7 +148,8 @@ Saved's own panel would never let you select.
 - `tbl_collections_set_header` — via `getCollections` (`lib/supabase/queries.ts:57-68`), passed
   through `AppShell` as the `collections` prop, used only to find `"main"`'s id (see Exceptions)
 - The [recipe-parser](../../recipe-parser/SPEC.md) backend, via `/api/recipe/submit`
-- `tbl_user_recipes_exclusions` — read directly for the planning triangles and the filter
+- `viw_user_collection_set.auto_plan` — the planning triangles and the filter: with the recipes, then
+  on its own (`loadAutoPlan`)
 
 ## Writes
 

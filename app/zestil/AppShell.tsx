@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { useRecipeSetup } from "./useRecipeSetup";
 import { ExploreTab } from "./ExploreTab";
@@ -10,9 +10,14 @@ import { ProfileTab } from "./ProfileTab";
 import { InstallBanner } from "@/components/InstallBanner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { DietHost } from "@/components/DietHost";
+import { loadAutoPlan, onPlanningChanged } from "@/lib/recipe-planning";
 import type { RecipeCollection, Collection, UserProfile } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
+
+// True until the first AppShell of this document mounts: only that one renders the page the server has
+// just built. Back from a recipe page reuses the cached page, recipes and all.
+let documentLoad = true;
 
 interface Props {
   user: { id: string; email: string };
@@ -46,6 +51,42 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
   }, []);
 
   const pickingRecipes = useRecipeSetup(user.id, refreshRecipes);
+
+  // The recipes' auto_plan (the Saved tab's triangles and filter), read again on its own: chat, the recipe
+  // page's switch and the diet banner change it after the recipes were read.
+  const refreshAutoPlan = useCallback(async () => {
+    try {
+      const autoPlan = await loadAutoPlan(user.id);
+      setRecipes((prev) => {
+        let changed = false;
+        const next = prev.map((r) => {
+          const value = autoPlan.get(r.recipe_uuid);
+          if (value === undefined || value === r.auto_plan) return r;
+          changed = true;
+          return { ...r, auto_plan: value };
+        });
+        return changed ? next : prev;
+      });
+    } catch { /* silent — the next show reads again */ }
+  }, [user.id]);
+
+  // Each show of the Saved tab, except at a load that just rendered it with the server's recipes.
+  const savedShown = activeTab === "saved";
+  const skipFirstShow = useRef(documentLoad && savedShown);
+  useEffect(() => {
+    documentLoad = false;
+  }, []);
+  useEffect(() => {
+    if (!savedShown) return;
+    if (skipFirstShow.current) {
+      skipFirstShow.current = false;
+      return;
+    }
+    refreshAutoPlan();
+  }, [savedShown, refreshAutoPlan]);
+
+  // The recipe page's switch, as the Plan tab's overlay, and the diet banner's answer.
+  useEffect(() => onPlanningChanged(refreshAutoPlan), [refreshAutoPlan]);
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
@@ -83,7 +124,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
           <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <SavedTab active={activeTab === "saved"} recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
+          <SavedTab recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <ProfileTab profile={profile} fallbackEmail={user.email} />

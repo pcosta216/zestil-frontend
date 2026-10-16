@@ -37,11 +37,13 @@ per-serving macro row (kcal/protein/carbs/fat/sugar/sodium), each value divided 
 **Planning switch** (D37, agents repo `docs/FRONTEND_RECIPE_PLANNING_EXCLUSIONS.md`): "Auto-plan",
 on when the recipe is used in automatic planning and chat suggestions. It sits right of "View
 original recipe", or alone in that row when the recipe has no `url`; both are 27.6px tall
-(`ROW_HEIGHT`). It shows once its state is read: the recipe's rows in `tbl_user_recipes_exclusions`
-(RLS returns the user's own), read when the page opens and again on `announcePlanningChanged`. Any
-row means off. A recipe kept out only by a strict diet (`diet:keto`, no `user` row) shows "Not
-keto" in amber in place of "Auto-plan", from `tbl_diet_rules.label`, as the database words it. It
-shows on the Plan tab's overlay too.
+(`ROW_HEIGHT`). Its state comes with the rest of the page from `viw_user_collection_set`, so it is
+in the server's HTML and the page reads nothing for it: `auto_plan` (on or off) and `auto_reason`
+(the diet, when only a strict diet keeps the recipe out). With an `auto_reason` the switch shows "Not
+keto" in amber in place of "Auto-plan" (`dietReason`; a raw `diet:keto` reads the same). The database
+words it `'not ' || lower(label)`, and every `tbl_diet_rules` label is its diet's name capitalised,
+bar "Balanced", which keeps nothing out, so the name gives the same words. It shows on the Plan
+tab's overlay too.
 
 Flipping it calls `set_recipe_planning`, with `p_account_key` from the session, since the overlay
 has no user id to hand down. The switch moves at once and is disabled until the reply; `ok: false`
@@ -49,9 +51,11 @@ or an error puts it back and shows a red banner (the reply's `message` when it h
 shows a green banner: "… won't be used in automatic planning. You can still add it to a day
 yourself.", "… is back in automatic planning.", or, when a diet kept it out, "…, even though it's
 not keto." Switching on removes every row, the diet's too, and the database records that as an
-override of the diet. Then `announcePlanningChanged` makes this page and the Saved tab's triangles
-read again. The banner is the tabs' save banner, at `z-[70]` so it shows above the collection picker
-and inside the overlay.
+override of the diet. The switch keeps the state it was flipped to, with nothing to read again.
+`announcePlanningChanged` makes `AppShell` read the recipes' `auto_plan` again (the Plan tab overlay);
+Back from this page to Saved reads it on the tab's show ([saved_tab.md](./saved_tab.md)). The banner
+is the tabs' save banner, at `z-[70]` so it shows above the collection picker and inside the
+overlay.
 
 **Back** (`BackButton.tsx`): `router.back()`, not a link to `/zestil?tab=saved` — arriving here
 from somewhere other than Saved (e.g. an Explore chat result) goes back the way you came, not
@@ -98,8 +102,8 @@ center number is real.
 - `viw_user_collection_set` — via `getRecipe` (`lib/supabase/queries.ts:97-115`)
 - `tbl_collections_line` — read indirectly through the view; written by the delete below and by
   the save flows in [plan_tab.md](../plan_tab.md#behaviour)
-- `tbl_user_recipes_exclusions` — the recipe's rows, for the planning switch
-- `tbl_diet_rules` — `diet, label`, for "Not keto"
+- `viw_user_collection_set.auto_plan`, `.auto_reason` — the planning switch's state and its "Not
+  keto", with the recipe
 
 ## Writes
 

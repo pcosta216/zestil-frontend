@@ -3,11 +3,9 @@ import type { RecipeCollection } from "@/lib/supabase/queries";
 
 interface Props {
   recipes: RecipeCollection[];
-  /** Whether a recipe is used in automatic planning; undefined until that is read. */
-  inPlanningOf?: (recipe: RecipeCollection) => boolean | undefined;
 }
 
-export function RecipeGrid({ recipes, inPlanningOf }: Props) {
+export function RecipeGrid({ recipes }: Props) {
   if (recipes.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
@@ -23,7 +21,7 @@ export function RecipeGrid({ recipes, inPlanningOf }: Props) {
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
       {recipes.map((r) => (
-        <RecipeCard key={r.recipe_uuid} recipe={r} inPlanning={inPlanningOf?.(r)} />
+        <RecipeCard key={r.recipe_uuid} recipe={r} />
       ))}
     </div>
   );

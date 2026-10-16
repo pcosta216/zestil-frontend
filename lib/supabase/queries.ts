@@ -51,6 +51,10 @@ export type RecipeCollection = {
   recipe_data: RecipeData | null;
   collection_names?: string[];
   created_at: string | null;
+  /** Used in automatic planning (D37): false while the recipe has a row in tbl_user_recipes_exclusions. */
+  auto_plan: boolean | null;
+  /** The diet ("keto") when only a strict diet keeps the recipe out; null otherwise. */
+  auto_reason: string | null;
 };
 
 export type Collection = { id: number; name: string };
