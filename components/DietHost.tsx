@@ -14,7 +14,7 @@ import {
   type DietSearchRecord,
   type RecipeSearchStart,
 } from "@/lib/diet";
-import { announcePlanningChanged } from "@/lib/recipe-planning";
+import { announcePlanningChanged, rememberAutoPlan } from "@/lib/recipe-planning";
 
 // The two screens a diet change adds (docs/FRONTEND_DIET_CHANGE.md), mounted once in AppShell:
 //
@@ -228,8 +228,11 @@ function FitAlerts({ userId }: { userId: string }) {
     try {
       await setDietPlanning(userId, alert.kind, alert.uuid, inPlanning);
       setQueue((q) => q.filter((a) => a.key !== alert.key));
-      // The Saved tab's switch shows the same rows.
-      if (alert.kind === "recipe") announcePlanningChanged();
+      // The Saved tab's triangle shows the same rows.
+      if (alert.kind === "recipe") {
+        rememberAutoPlan(alert.uuid, inPlanning);
+        announcePlanningChanged();
+      }
     } catch {
       setError(true);
     } finally {

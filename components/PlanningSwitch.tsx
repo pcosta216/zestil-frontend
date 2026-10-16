@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { SwitchTrack } from "@/components/ui-style";
-import { announcePlanningChanged, dietReason, setRecipePlanning } from "@/lib/recipe-planning";
+import { announcePlanningChanged, dietReason, rememberAutoPlan, setRecipePlanning } from "@/lib/recipe-planning";
 
 // The recipe page's "Use in automatic planning" switch (D37), and the state behind it. The state comes
 // with the recipe (viw_user_collection_set's auto_plan and auto_reason), so the switch shows at once and
@@ -58,7 +58,8 @@ export function useRecipePlanningSwitch(
             ? `${subject} is back in automatic planning, even though it's ${before.why}.`
             : `${subject} is back in automatic planning.`,
       });
-      // The Saved tab's triangles read auto_plan again.
+      // The Saved tab's triangles: at once on the overlay, and from the first frame back from this page.
+      rememberAutoPlan(recipeUuid, next);
       announcePlanningChanged();
     } catch {
       setOn(before.on);

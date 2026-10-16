@@ -74,12 +74,21 @@ from `viw_user_collection_set`, which follows `tbl_user_recipes_exclusions` at o
 recipe has a row there). It comes with the recipes (`getRecipes`, `/api/recipes`), so the triangles
 have their colour in the first HTML with no read of their own; `RecipeCard` reads it from the row,
 and the filter is `auto_plan === false`. Chat, the recipe page's switch and the diet banner change it
-after the recipes were read, so `AppShell` reads just `recipe_uuid, auto_plan` from the view again
-(`loadAutoPlan`, filtered by account like `getRecipes`) and merges it into the recipes: on each show
-of the Saved tab, except the first show of a load the server just rendered, and on
-`announcePlanningChanged` (the switch on the Plan tab's overlay, the diet banner's answer). Back from
-a recipe page reuses the cached page, recipes and all, so that show reads too. A triangle is white
-only when the view gives no value.
+after the recipes were read:
+
+- **The app's own changes** (the switch, the diet banner's answer) are kept with `rememberAutoPlan`
+  in `lib/recipe-planning.ts`, module memory that lasts the whole visit, and fire
+  `announcePlanningChanged`, so `AppShell` merges them into the recipes at once, with no read.
+- **Back from a recipe page** rebuilds `AppShell` from the page Next cached at the visit's first load
+  (back/forward reuses it), with the `auto_plan` of that moment. `AppShell` starts from
+  `withLatestAutoPlan(initialRecipes)`, so a recipe switched off since is grey from the first frame
+  rather than green until a read lands.
+- **Chat** changes the rows with no signal, so `AppShell` reads just `recipe_uuid, auto_plan` from the
+  view again (`loadAutoPlan`, filtered by account like `getRecipes`) on each show of the Saved tab,
+  except the first show of a load the server just rendered. Those values, and `/api/recipes`'s, are
+  remembered too.
+
+A triangle is white only when the view gives no value.
 
 **Scroll thumb** (`SavedTab.tsx:131-154`): a custom scrollbar indicator recomputed from
 `scrollTop`/`scrollHeight`/`clientHeight` on every scroll/resize and whenever `displayed` changes;

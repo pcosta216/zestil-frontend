@@ -54,4 +54,4 @@ The recipe page carries the planning switch (D37; [recipe_detail.md](./saved_tab
 A recipe kept out only by the strict diet shows "Not keto" on it, from the recipe's `auto_reason`
 (`viw_user_collection_set`); its Saved tab card's triangle is grey (`auto_plan` false,
 [saved_tab.md](./saved_tab/saved_tab.md)). The banner's answer for a recipe (`set_diet_planning`)
-fires `announcePlanningChanged`, so `AppShell` reads the recipes' `auto_plan` again.
+is remembered (`rememberAutoPlan`) and fires `announcePlanningChanged`, so the cards take it at once.

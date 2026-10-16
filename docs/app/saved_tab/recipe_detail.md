@@ -51,11 +51,11 @@ or an error puts it back and shows a red banner (the reply's `message` when it h
 shows a green banner: "… won't be used in automatic planning. You can still add it to a day
 yourself.", "… is back in automatic planning.", or, when a diet kept it out, "…, even though it's
 not keto." Switching on removes every row, the diet's too, and the database records that as an
-override of the diet. The switch keeps the state it was flipped to, with nothing to read again.
-`announcePlanningChanged` makes `AppShell` read the recipes' `auto_plan` again (the Plan tab overlay);
-Back from this page to Saved reads it on the tab's show ([saved_tab.md](./saved_tab.md)). The banner
-is the tabs' save banner, at `z-[70]` so it shows above the collection picker and inside the
-overlay.
+override of the diet. The switch keeps the state it was flipped to, with nothing to read again. The
+new value is remembered (`rememberAutoPlan`) and announced (`announcePlanningChanged`), so the Saved
+tab's triangle has it at once on the Plan tab's overlay, and from the first frame back from this page
+([saved_tab.md](./saved_tab.md)). The banner is the tabs' save banner, at `z-[70]` so it shows above
+the collection picker and inside the overlay.
 
 **Back** (`BackButton.tsx`): `router.back()`, not a link to `/zestil?tab=saved` — arriving here
 from somewhere other than Saved (e.g. an Explore chat result) goes back the way you came, not

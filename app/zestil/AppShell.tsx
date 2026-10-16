@@ -10,7 +10,7 @@ import { ProfileTab } from "./ProfileTab";
 import { InstallBanner } from "@/components/InstallBanner";
 import { UserAvatar } from "@/components/UserAvatar";
 import { DietHost } from "@/components/DietHost";
-import { loadAutoPlan, onPlanningChanged } from "@/lib/recipe-planning";
+import { loadAutoPlan, onPlanningChanged, rememberAutoPlan, withLatestAutoPlan } from "@/lib/recipe-planning";
 import type { RecipeCollection, Collection, UserProfile } from "@/lib/supabase/queries";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
@@ -36,7 +36,9 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
     window.history.replaceState(null, "", `/zestil?tab=${tab}`);
   }, []);
 
-  const [recipes, setRecipes]       = useState<RecipeCollection[]>(initialRecipes);
+  // With the latest auto_plan the app has seen: back from a recipe page, initialRecipes is the cached
+  // page's, from before any switch was flipped.
+  const [recipes, setRecipes]       = useState<RecipeCollection[]>(() => withLatestAutoPlan(initialRecipes));
   const [collections, setCollections] = useState<Collection[]>(initialCollections);
 
   const addCollection = useCallback((c: Collection) => {
@@ -46,7 +48,10 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
   const refreshRecipes = useCallback(async () => {
     try {
       const res = await fetch("/api/recipes");
-      if (res.ok) setRecipes(await res.json());
+      if (!res.ok) return;
+      const fresh: RecipeCollection[] = await res.json();
+      for (const r of fresh) if (typeof r.auto_plan === "boolean") rememberAutoPlan(r.recipe_uuid, r.auto_plan);
+      setRecipes(fresh);
     } catch { /* silent — stale data is acceptable */ }
   }, []);
 
@@ -57,16 +62,8 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
   const refreshAutoPlan = useCallback(async () => {
     try {
       const autoPlan = await loadAutoPlan(user.id);
-      setRecipes((prev) => {
-        let changed = false;
-        const next = prev.map((r) => {
-          const value = autoPlan.get(r.recipe_uuid);
-          if (value === undefined || value === r.auto_plan) return r;
-          changed = true;
-          return { ...r, auto_plan: value };
-        });
-        return changed ? next : prev;
-      });
+      autoPlan.forEach((value, recipeUuid) => rememberAutoPlan(recipeUuid, value));
+      setRecipes((prev) => withLatestAutoPlan(prev));
     } catch { /* silent — the next show reads again */ }
   }, [user.id]);
 
@@ -85,8 +82,9 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
     refreshAutoPlan();
   }, [savedShown, refreshAutoPlan]);
 
-  // The recipe page's switch, as the Plan tab's overlay, and the diet banner's answer.
-  useEffect(() => onPlanningChanged(refreshAutoPlan), [refreshAutoPlan]);
+  // The recipe page's switch, as the Plan tab's overlay, and the diet banner's answer: they remembered
+  // what they wrote, so the cards take it at once, with nothing to read.
+  useEffect(() => onPlanningChanged(() => setRecipes((prev) => withLatestAutoPlan(prev))), []);
 
   return (
     <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">

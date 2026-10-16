@@ -62,9 +62,34 @@ export function dietReason(autoReason: string | null | undefined): string | null
   return diet && diet !== "user" ? `not ${diet.toLowerCase()}` : null;
 }
 
+// ── what the app last saw ──────────────────────────────────────────────────────────────────
+// Back from a recipe page rebuilds AppShell from the page Next cached at the visit's first load, recipes
+// and their auto_plan as they were then: every return would start from that, until a read lands. So the
+// latest auto_plan the app has seen for each recipe (a flip, the diet banner's answer, a read) is kept
+// here, in the module, which outlives AppShell for the whole visit. Browser only: on the server this
+// module is shared by every request, so nothing is ever kept there.
+
+const latestAutoPlan = new Map<string, boolean>();
+
+export function rememberAutoPlan(recipeUuid: string, autoPlan: boolean) {
+  if (typeof window !== "undefined") latestAutoPlan.set(recipeUuid, autoPlan);
+}
+
+/** The recipes with the latest auto_plan the app has seen; the same array when nothing differs. */
+export function withLatestAutoPlan<T extends { recipe_uuid: string; auto_plan: boolean | null }>(recipes: T[]): T[] {
+  let changed = false;
+  const next = recipes.map((r) => {
+    const value = latestAutoPlan.get(r.recipe_uuid);
+    if (value === undefined || value === r.auto_plan) return r;
+    changed = true;
+    return { ...r, auto_plan: value };
+  });
+  return changed ? next : recipes;
+}
+
 // ── events ─────────────────────────────────────────────────────────────────────────────────
-// The recipe page's switch and the diet alert's answer (DietHost) write the rows, so they tell AppShell
-// to read the recipes' auto_plan again.
+// The recipe page's switch and the diet alert's answer (DietHost) remember what they wrote, then tell
+// AppShell, which takes it into its recipes.
 
 const CHANGED_EVENT = "zestil:recipe-planning-changed";
 
