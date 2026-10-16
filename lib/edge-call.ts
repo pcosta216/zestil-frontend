@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/browser";
 import { isAllowedCall, parseUiBody, substituteValue, type UiBody, type UiCallAction } from "@/lib/ui-body";
-import { EDGE_REGION_HEADER } from "@/lib/edge-region";
+import { EDGE_REGION_QUERY } from "@/lib/edge-region";
 
 export type EdgeReply = {
   ok?: boolean;
@@ -22,12 +22,11 @@ export async function callEdge(action: UiCallAction, value?: string | boolean): 
   const supabase = createClient();
   const { data: { session } } = await supabase.auth.getSession();
   if (!session?.access_token) throw new Error("no session");
-  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${action.endpoint}`, {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/${action.endpoint}?${EDGE_REGION_QUERY}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${session.access_token}`,
-      ...EDGE_REGION_HEADER,
     },
     body: JSON.stringify(value === undefined ? action.body : substituteValue(action.body, value)),
   });
