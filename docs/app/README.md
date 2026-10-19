@@ -69,6 +69,8 @@ docs/app/
     bugs_and_improvements.md   known-but-unfixed, and ideas — the one file about what ISN'T true
   plan_tab.md                the Plan tab (app/zestil/), outside onboarding — one screen, one file
   diet_change.md             the diet search's progress screen and the diet-fit banner (DietHost)
+  profile_tab.md             the Profile tab: name and "About you" (biometrics) edits, PATCH /api/profile,
+                               and the read-only Diet & health / Taste / Planning cards
   saved_tab/                 the Saved tab and the recipe detail route it links to
     saved_tab.md              My recipes/Recent sub-tabs, search, collection and planning filters,
                                 the planning triangle, add-recipe
@@ -92,8 +94,9 @@ differences rather than three near-identical files.
 question of its own), and `n_leftovers` is noted inside `n_active_slots.md` as commented out of
 the flow.
 
-Outside onboarding, the Plan tab (`plan_tab.md`) and the Saved tab plus its recipe detail route
-(`saved_tab/`) are documented. Explore, Profile and Groceries are **not** documented yet. Absence
+Outside onboarding, the Plan tab (`plan_tab.md`), the Saved tab plus its recipe detail route
+(`saved_tab/`) and the Profile tab (`profile_tab.md`) are documented. Explore and Groceries are
+**not** documented yet. Absence
 of a file means "not written", never "nothing special here".
 
 Run `node scripts/check-app-docs.mjs` to check these docs mechanically: header blocks, that every

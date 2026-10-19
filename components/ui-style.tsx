@@ -16,6 +16,7 @@ export const PILL_PRIMARY = "bg-green-primary border-green-primary text-white en
 export const RED = "bg-red-500 border-red-500 text-white enabled:hover:bg-red-600 enabled:hover:border-red-600";
 export const BLUE = "bg-[#23BCFD] border-[#23BCFD] text-white enabled:hover:bg-[#0ea5d6] enabled:hover:border-[#0ea5d6]";
 export const GREY = "bg-gray-400 border-gray-400 text-white enabled:hover:bg-gray-500 enabled:hover:border-gray-500";
+export const ORANGE = "bg-orange-500 border-orange-500 text-white enabled:hover:bg-orange-600 enabled:hover:border-orange-600";
 export const YELLOW = "bg-[#f9cb16] border-[#f9cb16] text-text-main enabled:hover:bg-[#e6b800] enabled:hover:border-[#e6b800]";
 // The colour follows the icon's meaning, never the payload (contract §3.2): trash red, edit grey,
 // info blue, alert yellow. The rest (toggle, undo, check, cross, plus, swap, block) are "open" there

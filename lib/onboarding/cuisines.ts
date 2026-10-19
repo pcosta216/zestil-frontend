@@ -168,6 +168,22 @@ export async function getCuisineLabel(cuisineSlug: string): Promise<string | und
 const labelCache = new Map<string, { label: string | undefined; expiresAt: number }>();
 
 /**
+ * `display_name` and `popular_dishes` for a set of cuisine slugs, in one read: the Profile tab's
+ * labels for taste_profile.sub_cuisines and favorite_dishes. A custom cuisine typed into "Other"
+ * has no row and is simply absent.
+ */
+export async function getCuisineRows(slugs: string[]): Promise<CuisineRow[]> {
+  if (slugs.length === 0) return [];
+  const supabase = await getOnboardingDbClient();
+  const { data, error } = await supabase
+    .from("tbl_cuisines_onboarding")
+    .select("cuisine_slug, display_name, popular_dishes")
+    .in("cuisine_slug", slugs);
+  if (error) throw new Error(`tbl_cuisines_onboarding read failed: ${error.message}`);
+  return (data ?? []) as CuisineRow[];
+}
+
+/**
  * Last-resort display text for a slug with no authoritative label: `ghanaian_cuisine` →
  * "Ghanaian", `latin_american` → "Latin American". Drops a trailing `_cuisine` because the
  * surrounding copy already says "cuisine"/"dishes from". Only ever a fallback — a real

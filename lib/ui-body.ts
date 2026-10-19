@@ -76,7 +76,7 @@ export type UiSlotBlock = { type: "slot"; id: string; blocks: UiBlock[]; previou
 export type UiBody = { version: number; blocks: UiBlock[]; previous?: UiBlock[] };
 
 // A response can never point the UI at an arbitrary URL — only these edge functions may be called.
-export const UI_ACTION_ENDPOINTS = ["sides-catalog", "snacks-catalog"];
+export const UI_ACTION_ENDPOINTS = ["sides-catalog", "snacks-catalog", "breakfasts-catalog"];
 
 export const ROOT_SCOPE = "root";
 

@@ -34,7 +34,7 @@ const FIT_MAX_TRIES = 24;
 // The tabs' save banner: 5s on screen plus its 300ms slide-out.
 const SAVE_BANNER_MS = 5300;
 
-const NOUN: Record<DietItemKind, string> = { recipe: "recipe", side: "side", snack: "snack" };
+const NOUN: Record<DietItemKind, string> = { recipe: "recipe", side: "side", snack: "snack", breakfast: "breakfast" };
 
 interface FitAlert {
   key: string;

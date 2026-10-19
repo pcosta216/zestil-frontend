@@ -12,6 +12,7 @@ import { UserAvatar } from "@/components/UserAvatar";
 import { DietHost } from "@/components/DietHost";
 import { loadAutoPlan, onPlanningChanged, rememberAutoPlan, withLatestAutoPlan } from "@/lib/recipe-planning";
 import type { RecipeCollection, Collection, UserProfile } from "@/lib/supabase/queries";
+import type { ProfileBiometrics, ProfileSection } from "@/lib/profile";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
 
@@ -24,9 +25,11 @@ interface Props {
   initialRecipes: RecipeCollection[];
   initialCollections: Collection[];
   profile: UserProfile | null;
+  biometrics: ProfileBiometrics | null;
+  profileSections: ProfileSection[] | null;
 }
 
-export function AppShell({ user, initialRecipes, initialCollections, profile }: Props) {
+export function AppShell({ user, initialRecipes, initialCollections, profile, biometrics, profileSections }: Props) {
   const searchParams = useSearchParams();
   const activeTab = (searchParams.get("tab") as Tab) ?? "explore";
   // Native replaceState syncs with useSearchParams without a server round-trip.
@@ -125,7 +128,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile }: 
           <SavedTab active={activeTab === "saved"} recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
         <div className={activeTab === "profile" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <ProfileTab profile={profile} fallbackEmail={user.email} />
+          <ProfileTab profile={profile} biometrics={biometrics} sections={profileSections} fallbackEmail={user.email} userId={user.id} />
         </div>
         <div className={activeTab === "groceries" ? "flex-1 flex flex-col items-center justify-center gap-2 text-text-muted" : "hidden"}>
           <span className="text-3xl">🌱</span>

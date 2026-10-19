@@ -43,7 +43,9 @@ sent as `active_date` on every request, and read back to decide whether a reply 
 trigger a fresh day-view append (`datesInResponse.includes(selectedDate)`). That append only
 happens for a reply that **changed the plan** (`response_type: "day_update"` or non-empty
 `changed_dates`); a reply that merely shows a day already carries its cards, so re-fetching it
-would draw them twice.
+would draw them twice. For the same reason a `day_update` whose own `meal_cards` include the followed
+day gets no extra append for it: its cards are that day's list. The append still happens when the
+reply names the day in `changed_dates` without carrying its cards.
 
 `response_type` selects the bubble:
 
@@ -116,7 +118,7 @@ red, `edit` grey, `info` blue, `alert` yellow (the colour column of §3.2); the 
 
 Actions:
 - `call`: from the browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the
-  user's JWT (allowlist in `UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`).
+  user's JWT (allowlist in `UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`, `breakfasts-catalog`).
 - `toggle`: local state, shows or hides a `nutrition` block.
 - `replace`: local, swaps its scope for the given blocks; `[]` removes the scope (the snack list's
   Continue). No pending state. What it swaps out is **kept** for `revert`: on the slot it creates (or
@@ -172,7 +174,7 @@ pills are hidden to make room, so the original / optimised switch is used while 
 follow it.
 
 The small line under the name (`slotRoleLabel` in `PlanTab.tsx`) reads `Dinner`, `Dinner ⋅ Side` for a non-main
-role, then the amount: `⋅ 50g` for a side, snack or ingredient (`quantity_g`), `⋅ 0.5 servings` for a recipe
+role, then the amount: `⋅ 50g` for a side, snack, breakfast food or ingredient (`quantity_g`), `⋅ 0.5 servings` for a recipe
 (`serving_multiplier`). A recipe-shaped side or snack has no gram amount on the card, so its line stops at
 the role.
 
@@ -183,8 +185,16 @@ picking it, the user can still add it by hand); a **side** gets "Remove from my 
 `tbl_week_plan_entries.source_uuid` for side and snack entries (null for recipes and ingredients, which
 get no such button). The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
 and an Undo, is drawn inside the card with `UiBodyBlocks`, so Undo works with no extra code. It does not
-touch the planned entry: that stays on the day. A failed call shows an inline error. The recipe is fetched
+touch the planned entry: that stays on the day. The reply's Undo is drawn orange here (`buttonTone`, not the contract's default green), with a green OK on the same row at the right that just clears the reply from the card (`dismiss`, no call). A failed call shows an inline error. The recipe is fetched
 when View recipe is tapped (once per card), not when the card appears.
+
+**Breakfast.** The planner composes a breakfast from the My breakfasts list, so one slot can hold several
+entries, all with role `main` (nothing assumes one main per meal; every entry gets its own card). A food
+item is an entry of type `breakfast` (`source_uuid` = `breakfast_uuid`, `quantity_g`, snapshot with
+`breakfast_kind` / `display_name`); `rowToMealCard` builds its card like a snack food's, and its subtitle
+reads `Breakfast ⋅ 50g`. A recipe item is a plain `recipe` entry. A breakfast card gets no
+stop-suggesting button yet. The My breakfasts list itself, like My snacks, is the agent's `ui_body`
+(`breakfasts-catalog`); the app has no screen of its own for it.
 
 `IngredientCard` (an `ingredients_list` suggestion, not a planned item) keeps the original behaviour: a
 bar that slides in Add / More / Info. Only Add does anything; Info has no handler, and More's two items
@@ -230,7 +240,7 @@ the exception: each patches only the one block its button lived in. See
 - Two Supabase Edge Functions: `router-agent` (chat) and `optimize-day-agent` (Optimise) — their
   own logic isn't visible from this repo
 - Two more, called straight from the browser with the user's JWT (`lib/edge-call.ts`, allowlist in
-  `lib/ui-body.ts`): `sides-catalog` and `snacks-catalog`, by `ui_body` buttons and by a plan card's
+  `lib/ui-body.ts`): `sides-catalog`, `snacks-catalog` and `breakfasts-catalog`, by `ui_body` buttons and by a plan card's
   stop-suggesting button
 
 ## Writes

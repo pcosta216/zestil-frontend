@@ -6,9 +6,10 @@ Component: `app/zestil/[id]/page.tsx`, `app/zestil/[id]/BackButton.tsx` · Share
 `components/WeekdayRecipeCard.tsx:152`) · Planning switch: `components/PlanningSwitch.tsx`,
 `lib/recipe-planning.ts`
 Verify: no seed/browser script yet — manually check by opening a card from
-[saved_tab.md](./saved_tab.md) and using Delete Recipe. The planning switch has been checked only on
-a preview page whose Supabase calls were answered by Playwright (on, "Not keto" without a link, a
-flip, a failed flip), never against a live account (it writes `tbl_user_recipes_exclusions`)
+[saved_tab.md](./saved_tab.md) and using Delete Recipe. The planning switch was checked live on
+2026-10-16 on `doe@gmail.com` (strict Mediterranean): "Not mediterranean" on a recipe the diet keeps
+out; a recipe flipped off ("…won't be used…", `auto_reason` `user`) and back on ("…is back…"), its
+Saved triangle right from the first frame after Back each time; a failed flip only on a preview page
 
 Reached from a `RecipeCard` link (`components/RecipeCard.tsx:34`, `/zestil/[uuid]`) in Saved, or
 wherever else a `recipe_uuid` is known. It's a standalone route, not client tab state like
@@ -39,8 +40,8 @@ on when the recipe is used in automatic planning and chat suggestions. It sits r
 original recipe", or alone in that row when the recipe has no `url`; both are 27.6px tall
 (`ROW_HEIGHT`). Its state comes with the rest of the page from `viw_user_collection_set`, so it is
 in the server's HTML and the page reads nothing for it: `auto_plan` (on or off) and `auto_reason`
-(the diet, when only a strict diet keeps the recipe out). With an `auto_reason` the switch shows "Not
-keto" in amber in place of "Auto-plan" (`dietReason`; a raw `diet:keto` reads the same). The database
+(`diet:keto` when only a strict diet keeps the recipe out, `user` for the user's own "off", null when
+in). With a `diet:` reason the switch shows "Not keto" in amber in place of "Auto-plan" (`dietReason`). The database
 words it `'not ' || lower(label)`, and every `tbl_diet_rules` label is its diet's name capitalised,
 bar "Balanced", which keeps nothing out, so the name gives the same words. It shows on the Plan
 tab's overlay too.

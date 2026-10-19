@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Ban, BookOpenText, Info, Trash2 } from "@/lib/icons";
 import { MacroRings } from "@/components/MacroRings";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
-import { Spinner } from "@/components/ui-style";
+import { ORANGE, Spinner } from "@/components/ui-style";
 import { ServingInfo } from "./serving_info";
 import { RecipeDetailHero } from "./RecipeDetailHero";
 import { callEdge } from "@/lib/edge-call";
@@ -217,7 +217,7 @@ export function WeekdayRecipeCard({
 
             {reply && (
               <div className="pt-2.5 border-t border-[rgba(0,0,0,0.07)] flex flex-col gap-2.5 text-[12px] leading-relaxed text-text-main">
-                <UiBodyBlocks uiBody={reply} onChange={(update) => setReply((prev) => (prev ? update(prev) : prev))} />
+                <UiBodyBlocks uiBody={reply} onChange={(update) => setReply((prev) => (prev ? update(prev) : prev))} dismiss={{ caption: "OK", onClick: () => setReply(null) }} buttonTone={ORANGE} />
               </div>
             )}
           </div>

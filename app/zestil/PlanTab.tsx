@@ -338,7 +338,7 @@ function slotRoleLabel(card: MealCard): string {
   const role = (card.role ?? "main").toLowerCase();
   const parts = [slot];
   if (role !== "main") parts.push(cap(role));
-  if ((card.entry_type === "snack" || card.entry_type === "side" || card.entry_type === "ingredient") && card.quantity_g != null) {
+  if ((card.entry_type === "snack" || card.entry_type === "side" || card.entry_type === "breakfast" || card.entry_type === "ingredient") && card.quantity_g != null) {
     parts.push(`${trimNum(card.quantity_g)}g`);
   } else if (card.entry_type === "recipe" && card.serving_multiplier != null) {
     parts.push(`${trimNum(card.serving_multiplier)} ${card.serving_multiplier === 1 ? "serving" : "servings"}`);
@@ -396,7 +396,7 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   title={card.name}
                   subtitle={slotRoleLabel(card)}
                   kcal={card.macros?.kcal}
-                  servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack') && (card.metadata?.side_kind ?? card.metadata?.snack_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
+                  servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack' || card.entry_type === 'breakfast') && (card.metadata?.side_kind ?? card.metadata?.snack_kind ?? card.metadata?.breakfast_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
                   serving_multiplier={card.serving_multiplier}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
                   notes={card.notes}
@@ -731,14 +731,15 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
       // If the agent changed the day the user is following, append a fresh block for it below the
       // reply so the transcript ends on its current state. A turn that only shows a day ("show me
       // today") has nothing to refresh: its cards are already in the reply and are the only thing in
-      // datesInResponse, so fetching again would draw the same cards twice.
+      // datesInResponse, so fetching again would draw the same cards twice. The same goes for a
+      // day_update whose reply carries the day's cards: they are the day as it now stands.
       // setActive:false because activeDate was just resolved from the response above and the
       // append must not overwrite that decision — notably the multi-day case that clears it.
       const changedPlan = responseType === "day_update" || (changed_dates?.length ?? 0) > 0;
       if (changedPlan) {
         if (selectedDate === "") {
           if (datesInResponse.length) appendWeekView({ setActive: false }).catch(() => {});
-        } else if (datesInResponse.includes(selectedDate)) {
+        } else if (datesInResponse.includes(selectedDate) && !(meal_cards ?? []).some((c: MealCard) => c.date === selectedDate)) {
           appendDayView(selectedDate, { setActive: false }).catch(() => {});
         }
       }

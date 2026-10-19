@@ -7,9 +7,10 @@ recipes, read again by `app/zestil/AppShell.tsx` (`refreshAutoPlan`, `lib/recipe
 Verify: no seed/browser script yet — manually check via `/zestil?tab=saved` against an account with
 recipes in more than one collection, plus a **separate** check of the Add-recipe flow. Any account
 created since 2026-09-30 can demonstrate that flow (`doe@gmail.com` holds the 11 defaults); an
-older one may hold no collections at all — see Exceptions. The planning triangle and filter need an
-account with a recipe kept out of planning; so far they have only been rendered with fixture data,
-never against a live account
+older one may hold no collections at all — see Exceptions. The planning triangle and filter were
+checked live on 2026-10-16 on `doe@gmail.com` (strict Mediterranean): every card's colour matched
+`auto_plan`, the filter listed exactly the recipes kept out, and after a diet change in chat the
+next show of the tab matched the view again
 
 One of five tabs in `AppShell` (`NAV_ITEMS`, `AppShell.tsx:110-160`). Like Plan and Explore, it's
 client tab state toggled with a `hidden` class (`AppShell.tsx:69-71`), not a route of its own —
@@ -128,6 +129,13 @@ request(s) settle. The overlay only closes on success; on error the entered text
 the user can retry.
 
 ## Exceptions & gotchas
+
+**A recipe added during the visit drops out of the list after Back from a recipe page.** Back
+rebuilds `AppShell` from the page Next cached at the visit's first load, so `recipes` is that load's
+list again: anything `refreshRecipes` brought in since (the Add-recipe flow, a chat save, a diet
+search) is missing until the next refresh or reload. `withLatestAutoPlan` carries over only
+`auto_plan`, not new recipes. Seen live on 2026-10-16: a recipe added from this tab vanished after
+opening another recipe and going Back, and came back when the diet search refreshed the list.
 
 **Adding a recipe needs a collection to file it in, and the frontend never creates one.**
 `handleAddRecipe` returns on `checkedCollections.size === 0` (`SavedTab.tsx:72`), and Add is

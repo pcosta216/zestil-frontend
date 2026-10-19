@@ -7,7 +7,8 @@
 // list, since is_optimised needs adjusted_snapshot and role needs role — makes that drift
 // impossible rather than merely fixed once.
 //
-// source_uuid is what a side or snack entry points at: table_sides.side_uuid or tbl_snacks.snack_uuid.
+// source_uuid is what a side, snack or breakfast entry points at: table_sides.side_uuid, tbl_snacks.snack_uuid
+// or the breakfast list item's breakfast_uuid.
 // It is how a plan card can ask the catalog to stop suggesting that item.
 
 import { currentQtyG, originalQtyG } from "@/lib/entry-quantity";
@@ -63,12 +64,14 @@ export function rowToMealCard(e: any) {
   const snap        = e.adjusted_snapshot ?? e.original_snapshot ?? {};
   // Catalog entries (side | snack) carry a curated display_name and a kind. Recipe-kind
   // catalog entries are recipe-shaped (frozen per-serving macros, sized by serving_multiplier).
-  const isCatalog       = e.entry_type === "side" || e.entry_type === "snack";
-  const catalogKind     = snap.side_kind ?? snap.snack_kind;
+  // A breakfast entry is a food item from the breakfast list; a recipe item at breakfast is a plain recipe
+  // entry. All breakfast entries have role "main", and a breakfast may have several.
+  const isCatalog       = e.entry_type === "side" || e.entry_type === "snack" || e.entry_type === "breakfast";
+  const catalogKind     = snap.side_kind ?? snap.snack_kind ?? snap.breakfast_kind;
   const isRecipeCatalog = isCatalog && catalogKind === "recipe";
   const isRecipeShaped  = e.entry_type === "recipe" || isRecipeCatalog;
   const name        = isCatalog
-    ? (snap.display_name ?? snap.metadata?.meal_title ?? snap.meal_title ?? snap.description ?? (e.entry_type === "snack" ? "Snack" : "Side"))
+    ? (snap.display_name ?? snap.metadata?.meal_title ?? snap.meal_title ?? snap.description ?? (e.entry_type === "snack" ? "Snack" : e.entry_type === "breakfast" ? "Breakfast" : "Side"))
     : e.entry_type === "recipe"
       ? (snap.metadata?.meal_title ?? snap.meal_title ?? "Unknown recipe")
       : (snap.ingredient_name ?? snap.description ?? "Unknown ingredient");

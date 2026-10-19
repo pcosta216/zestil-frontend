@@ -10,8 +10,8 @@ import { createClient } from "@/lib/supabase/browser";
 // that as an override of the diet.
 //
 // The app never reads the table: viw_user_collection_set follows it at once, and the recipes carry its
-// auto_plan (in planning or not) and auto_reason (the diet, when only a diet keeps the recipe out) from
-// the server. loadAutoPlan reads just auto_plan again.
+// auto_plan (in planning or not) and auto_reason ("diet:keto" when only a diet keeps the recipe out,
+// "user" for the user's own) from the server. loadAutoPlan reads just auto_plan again.
 
 /** recipe_uuid → auto_plan, read again from the view (chat changes the rows too). */
 export async function loadAutoPlan(accountKey: string): Promise<Map<string, boolean>> {
@@ -53,7 +53,7 @@ export async function setRecipePlanning(recipeUuid: string, inPlanning: boolean)
 }
 
 /**
- * "not keto" from a recipe's auto_reason ("keto"; a raw "diet:keto" reads the same), null when there is
+ * "not keto" from a recipe's auto_reason ("diet:keto"; a bare "keto" reads the same), null for "user" or
  * none. The database words it 'not ' || lower(label): every diet's label is its name capitalised, bar
  * "Balanced", which keeps nothing out, so the name gives the same words without reading tbl_diet_rules.
  */

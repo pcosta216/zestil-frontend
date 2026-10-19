@@ -9,7 +9,7 @@ import type { DiscoveryItem } from "@/components/DiscoveryItems";
 // outlive a tab switch), so they talk to one host in AppShell through window events instead of
 // threading props through every tab.
 
-export type DietItemKind = "recipe" | "side" | "snack";
+export type DietItemKind = "recipe" | "side" | "snack" | "breakfast";
 
 /** What a chat reply carries when it started a search for the diet's recipes. */
 export interface RecipeSearchStart {

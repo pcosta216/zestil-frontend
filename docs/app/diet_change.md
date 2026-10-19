@@ -3,8 +3,12 @@
 Status: built, not yet exercised against a live backend · Last verified: 2026-10-15
 Component: `components/DietHost.tsx` (mounted once in `app/zestil/AppShell.tsx`) · Calls and events:
 `lib/diet.ts` · Request list shared with onboarding: `components/DiscoveryItems.tsx`
-Verify: none yet — typechecked only. Needs a user with a strict diet and the diet migrations applied
-(`2026101501`–`2026101505`). Backend contract: `docs/FRONTEND_DIET_CHANGE.md`.
+Verify: no script. Checked live on 2026-10-16 on `doe@gmail.com` (strict Mediterranean, keto for
+part of the test). A saved non-Mediterranean recipe brought the fit banner once the save banner
+cleared, and "No, keep it out" turned its card grey at once (`diet:mediterranean`). In chat, an added
+side that didn't fit keto brought the §5.9 alert. Switching back to Mediterranean, the search offer's
+yes opened the progress screen, which reached "Your new recipes are ready" (10 found, 10 saved) in
+38 s. Backend contract: `docs/FRONTEND_DIET_CHANGE.md`.
 
 Two screens, one host. The chats and save paths only announce what happened (window events from
 `lib/diet.ts`); `DietHost` owns everything on screen, so a progress sheet survives a tab switch.
@@ -43,15 +47,15 @@ Two screens, one host. The chats and save paths only announce what happened (win
 
 ## Not built
 
-- **Sides and snacks added from the app's own screens.** The app has none: they are only added in
+- **Sides, snacks and breakfast items added from the app's own screens.** The app has none: they are only added in
   chat, where the "Added" card carries the alert as a `button_group` (`diet_alert`, agents repo
-  `docs/UI_BODY_CONTRACT.md` §5.9; this repo's copy stops at §5.6). When such a screen exists,
-  `announceItemSaved("side" | "snack", uuid)` brings up the same banner.
+  `docs/UI_BODY_CONTRACT.md` §5.9). When such a screen exists,
+  `announceItemSaved("side" | "snack" | "breakfast", uuid)` brings up the same banner.
 
 ## Why a recipe is off
 
 The recipe page carries the planning switch (D37; [recipe_detail.md](./saved_tab/recipe_detail.md)).
 A recipe kept out only by the strict diet shows "Not keto" on it, from the recipe's `auto_reason`
-(`viw_user_collection_set`); its Saved tab card's triangle is grey (`auto_plan` false,
+(`diet:keto`, `viw_user_collection_set`); its Saved tab card's triangle is grey (`auto_plan` false,
 [saved_tab.md](./saved_tab/saved_tab.md)). The banner's answer for a recipe (`set_diet_planning`)
 is remembered (`rememberAutoPlan`) and fires `announcePlanningChanged`, so the cards take it at once.

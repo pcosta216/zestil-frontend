@@ -53,7 +53,7 @@ export type RecipeCollection = {
   created_at: string | null;
   /** Used in automatic planning (D37): false while the recipe has a row in tbl_user_recipes_exclusions. */
   auto_plan: boolean | null;
-  /** The diet ("keto") when only a strict diet keeps the recipe out; null otherwise. */
+  /** Why it is out: "diet:keto" when only a strict diet keeps it out, "user" for the user's own; null when in. */
   auto_reason: string | null;
 };
 

@@ -127,7 +127,18 @@ function ChoiceBlock({ block, disabled, pressed, onSubmit, onCancel }: {
 //
 // State is keyed by scope + id, never by the bare id: an endpoint's reply uses fixed ids (`undo`), so
 // two removed snacks each hold their own `undo` (§4.3).
-export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (update: (prev: UiBody) => UiBody) => void }) {
+//
+// `dismiss` is for a caller that shows a reply in place and needs a way to clear it: an OK button, drawn
+// on the same row as the body's last top-level button (an Undo), at the right end, or on a row of its own,
+// right-aligned, when the body has no such button. `buttonTone` recolours every button in the body (the plan
+// card's reply is just an Undo, which the contract's table draws green and the card draws orange). It does
+// not go by icon name: the reply's Undo may arrive with another icon, or none.
+export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
+  uiBody: UiBody;
+  onChange: (update: (prev: UiBody) => UiBody) => void;
+  dismiss?: { caption: string; onClick: () => void };
+  buttonTone?: string;
+}) {
   const [pending,  setPending]  = useState<Record<string, string>>({});  // scope → the control that was pressed
   const [errors,   setErrors]   = useState<Record<string, string>>({});  // scope → inline error
   const [open,     setOpen]     = useState<Record<string, boolean>>({}); // collapsed section / group → expanded
@@ -202,6 +213,14 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
 
   // `scope` is where the control's blocks live (ids and local state); `actionScope` is what its call
   // replaces — the same, except for a button inside a root-level group, whose scope is the group.
+  // The button the dismiss button sits beside, if the body has one.
+  const dismissButton = dismiss
+    ? [...uiBody.blocks].reverse().find((b) => b.type === "button")
+    : undefined;
+  const dismissEl = dismiss && (
+    <button type="button" onClick={dismiss.onClick} className={`${PILL} ${PILL_SECONDARY}`}>{dismiss.caption}</button>
+  );
+
   function renderButton(btn: UiButton, scope: string, actionScope: string, blocks: UiBlock[], extraClass = "", cell = false) {
     const action = btn.action;
     const control = key(scope, btn.id);
@@ -244,7 +263,7 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
         key={btn.id}
         disabled={!onClick || busy(actionScope)}
         onClick={onClick}
-        className={`${cell ? CELL : PILL} ${(btn.icon && TONES[btn.icon]) || (btn.style === "primary" ? PILL_PRIMARY : PILL_SECONDARY)} ${extraClass}`}
+        className={`${cell ? CELL : PILL} ${buttonTone || (btn.icon && TONES[btn.icon]) || (btn.style === "primary" ? PILL_PRIMARY : PILL_SECONDARY)} ${extraClass}`}
       >
         {pending[actionScope] === control ? <Spinner size={cell ? 14 : 12} /> : Icon && <Icon size={cell ? 14 : 13} />}
         {btn.caption}
@@ -284,6 +303,14 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
       }
 
       if (block.type === "button") {
+        if (dismiss && scope === ROOT_SCOPE && block === dismissButton) {
+          return (
+            <div key={block.id} className="flex items-center justify-between gap-2">
+              {renderButton(block, scope, scope, blocks)}
+              {dismissEl}
+            </div>
+          );
+        }
         return renderButton(block, scope, scope, blocks, "self-start");
       }
 
@@ -454,6 +481,7 @@ export function UiBodyBlocks({ uiBody, onChange }: { uiBody: UiBody; onChange: (
   return (
     <>
       {renderBlocks(uiBody.blocks, ROOT_SCOPE)}
+      {dismiss && !dismissButton && <div className="flex justify-end">{dismissEl}</div>}
       {errors[ROOT_SCOPE] && <div className="text-[11px] text-red-500">{errors[ROOT_SCOPE]}</div>}
     </>
   );
