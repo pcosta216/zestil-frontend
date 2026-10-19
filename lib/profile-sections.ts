@@ -1,9 +1,9 @@
-import { getCuratedSection, getDaysOfWeek, getNodeContent } from "@/lib/onboarding/content";
+import { getCuratedSection, getDaysOfWeek, getNodeContent, sortByOrder } from "@/lib/onboarding/content";
 import { getCuisineRows, humanizeSlug } from "@/lib/onboarding/cuisines";
 import { getNodeStructure } from "@/lib/onboarding/flow-structure";
 import { findPairingDish } from "@/lib/onboarding/pairing";
 import { DAYS_OF_WEEK, type ContentOption, type UserMemory } from "@/lib/onboarding/types";
-import type { ProfileRow, ProfileSection } from "@/lib/profile";
+import type { ProfileGroup, ProfileRow, ProfileSection } from "@/lib/profile";
 
 // Server-only. The Profile tab's read-only cards, built from memory_json with every stored code
 // turned into the label onboarding showed for it: node options from tbl_onboarding_content,
@@ -30,9 +30,10 @@ async function nodeLabels(nodeId: string): Promise<Labels> {
   return labelsFrom(content?.options);
 }
 
-/** n_active_slots' own options plus its always_include (the forced "snack"). */
+/** n_active_slots' own options in their order, then its always_include (the forced "snack"): the map's order is the meals' order. */
 async function slotLabels(): Promise<Labels> {
-  const labels = await nodeLabels("n_active_slots");
+  const content = await soft(getNodeContent("n_active_slots"), null);
+  const labels = labelsFrom(sortByOrder(content?.options ?? []));
   try {
     for (const extra of getNodeStructure("n_active_slots").always_include ?? []) labels.set(String(extra.value), extra.label);
   } catch {
@@ -95,20 +96,35 @@ function macroPriority(values: unknown, goals: Labels): string | undefined {
   return [first.charAt(0).toUpperCase() + first.slice(1), ...rest].join(", then ");
 }
 
-/** "Pizza (Friday dinner)", in week order from the user's own week start. */
-function fixedMeals(memory: UserMemory, days: Labels, slots: Labels): string[] {
-  const start = DAYS_OF_WEEK.indexOf(memory.profile.locale.week_start_day ?? "sunday");
-  const week = [...DAYS_OF_WEEK.slice(Math.max(start, 0)), ...DAYS_OF_WEEK.slice(0, Math.max(start, 0))];
-  const out: string[] = [];
+/**
+ * Fixed meals grouped by day, in week order from the user's own week start, then by meal in
+ * n_active_slots' order (breakfast, lunch, dinner, snack), with each meal's titles A–Z.
+ */
+function fixedMeals(memory: UserMemory, days: Labels, slots: Labels): ProfileGroup[] {
+  const start = Math.max(DAYS_OF_WEEK.indexOf(memory.profile.locale.week_start_day ?? "sunday"), 0);
+  const week = [...DAYS_OF_WEEK.slice(start), ...DAYS_OF_WEEK.slice(0, start)];
+  const slotOrder = [...slots.keys()];
+  const rank = (slot: string) => (slotOrder.includes(slot) ? slotOrder.indexOf(slot) : slotOrder.length);
+
+  const groups: ProfileGroup[] = [];
   for (const day of week) {
+    const bySlot = new Map<string, string[]>();
     for (const meal of memory.cooking_profile.day_constraints?.[day]?.fixed_meals ?? []) {
       const title = text(meal?.title);
       if (!title) continue;
-      const slot = text(meal.meal_slot);
-      out.push(`${title} (${display(day, days)}${slot ? ` ${display(slot, slots).toLowerCase()}` : ""})`);
+      const slot = text(meal.meal_slot) ?? "";
+      bySlot.set(slot, [...(bySlot.get(slot) ?? []), title]);
     }
+    if (bySlot.size === 0) continue;
+    const entries = [...bySlot.entries()]
+      .sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b))
+      .map(([slot, titles]) => ({
+        label: slot ? display(slot, slots) : "Any meal",
+        items: [...new Set(titles)].sort((a, b) => a.localeCompare(b)),
+      }));
+    groups.push({ label: display(day, days), entries });
   }
-  return out;
+  return groups;
 }
 
 const listRow = (label: string, items: string[], empty: string): ProfileRow => ({ label, items, empty });
@@ -179,7 +195,7 @@ export async function buildProfileSections(memory: UserMemory): Promise<ProfileS
         textRow("Macro priority", macroPriority(planning.macro_priority, goals), "Not set"),
         listRow("Meals", list(planning.active_slots, slots), "Not set"),
         textRow("Week starts on", weekStart ? display(weekStart, days) : undefined, "Not set"),
-        fixed.length > 0 && listRow("Fixed meals", fixed, "None"),
+        fixed.length > 0 && { label: "Fixed meals", groups: fixed, empty: "None" },
       ),
     },
   ];

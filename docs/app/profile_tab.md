@@ -60,7 +60,8 @@ back navigation from a recipe page would otherwise restore the cached page with 
 
 `buildProfileSections` (`lib/profile-sections.ts`) runs in `app/zestil/page.tsx` on the memory
 `loadProfileMemory` already read for "About you", and hands the tab rows with labels resolved. A
-list shows as tags, a single value as text, nothing as "None" or "Not set". If building them fails
+list shows as tags, a grouped row (fixed meals) as day headers under its label, a single value as
+text, nothing as "None" or "Not set". If building them fails
 the three cards are left out and "About you" still shows.
 
 | Card | Row | Memory path | Labels from |
@@ -79,7 +80,7 @@ the three cards are left out and "About you" still shows.
 | Planning | Macro priority | `meal_planning_preferences.macro_priority` | "Protein, then fat, then carbs" |
 | | Meals | `meal_planning_preferences.active_slots` | `node:n_active_slots` options + its `always_include` (Snacks) |
 | | Week starts on | `profile.locale.week_start_day` | `content:days_of_week` |
-| | Fixed meals *(when set)* | `cooking_profile.day_constraints.*.fixed_meals` | "Pizza (Friday dinner)", from the week start |
+| | Fixed meals *(when set)* | `cooking_profile.day_constraints.*.fixed_meals` | under the label, each day (from the week start) as a header with its meals under it as sub-headers, in `n_active_slots` order, titles A–Z |
 
 - **Every label lookup is soft.** A failed read or an unknown code falls back to the stored text:
   a bare slug is humanised (`bacalhau` → "Bacalhau"), typed text keeps its wording with a capital

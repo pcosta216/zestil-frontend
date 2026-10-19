@@ -183,7 +183,7 @@ a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: fals
 picking it, the user can still add it by hand); a **side** gets "Remove from my sides" (`sides-catalog`
 `remove`). Both take the item from `catalog_uuid`, which `rowToMealCard` fills from
 `tbl_week_plan_entries.source_uuid` for side and snack entries (null for recipes and ingredients, which
-get no such button). The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
+get no such button). A card in a chat reply is built by the agent and has no `catalog_uuid`, so the uuid is read from its `metadata` snapshot (`snack_uuid` / `side_uuid`) instead; without that the button does not show. The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
 and an Undo, is drawn inside the card with `UiBodyBlocks`, so Undo works with no extra code. It does not
 touch the planned entry: that stays on the day. The reply's Undo is drawn orange here (`buttonTone`, not the contract's default green), with a green OK on the same row at the right that just clears the reply from the card (`dismiss`, no call). A failed call shows an inline error. The recipe is fetched
 when View recipe is tapped (once per card), not when the card appears.

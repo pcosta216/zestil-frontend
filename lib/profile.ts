@@ -26,14 +26,22 @@ export interface ProfileBiometrics {
   values: BiometricsValues;
 }
 
+/** A labelled group of tagged entries, for a row that nests: fixed meals by day, then by meal. */
+export interface ProfileGroup {
+  label: string;
+  entries: { label: string; items: string[] }[];
+}
+
 /**
- * One row of a read-only card: `items` show as chips, `text` as plain text, and a row with neither
- * shows `empty` ("None", "Not set"). Built on the server with labels already resolved.
+ * One row of a read-only card: `items` show as tags, `groups` as a small table under the label,
+ * `text` as plain text, and a row with none of them shows `empty` ("None", "Not set"). Built on
+ * the server with labels already resolved.
  */
 export interface ProfileRow {
   label: string;
   text?: string;
   items?: string[];
+  groups?: ProfileGroup[];
   empty: string;
 }
 
