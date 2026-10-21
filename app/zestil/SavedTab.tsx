@@ -439,7 +439,6 @@ export function SavedTab({ active, recipes, collections: rawCollections = [], on
       {/* Search bar */}
       {subTab === "mine" && (
         <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
-          <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
           <div className="flex-1 relative">
             <Search size={14} strokeWidth={1.8} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[#B4B2A9] pointer-events-none" />
             <input

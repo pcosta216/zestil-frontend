@@ -17,6 +17,10 @@ tab switches regardless of which tab is in front. There's no `app/zestil/plan/` 
 client tab state, not a page of its own. `groceries`, also in `NAV_ITEMS`, is a static "Coming
 soon" placeholder, not a real tab.
 
+The opening "Today" block is fetched by the mount effect. In dev, Strict Mode and Fast Refresh run that effect
+twice, so the effect cancels its own fetch on cleanup (`isCurrent` in `appendDayView`); without that, today
+was drawn twice on load. The effect also does nothing when the chat already has messages: it is the only code that starts the chat over, and an effect re-run on a mounted PlanTab (Fast Refresh, a hidden-then-shown boundary) must not wipe the history. The "Hi! I'm your meal planner…" greeting is added after that block (or on its own if the fetch fails), so the transcript opens on today's plan and the greeting sits under it; until the fetch ends the chat is empty.
+
 ## Behaviour
 
 **Mount** (`PlanTab.tsx:494-536, 703-707`): fetches `/api/plan/week` for a 21-day window (today
@@ -124,6 +128,11 @@ Actions:
   Continue). No pending state. What it swaps out is **kept** for `revert`: on the slot it creates (or
   on the body, for a body-level scope), written by the same state update as the swap, one level, only
   the latest swap. For a group that is the group and its macros panel; for a slot, its blocks.
+- A list row that comes back from a call (the reply to Save or to the Auto switch) is `collapsed: false` in
+  the contract, which would leave an open row with no way to fold it. `keepRowsCollapsible` in
+  `UiBodyBlocks.tsx` makes such a row collapsible again, and keeps it open, when it arrives inside a slot. A
+  "row" is a `button_group` with an Info toggle or a switch; Remove's sentence-plus-Undo group is not one and
+  stays as sent.
 - `revert`: local, puts back what the last `replace` kept and forgets it (the snack Edit form's
   Cancel — no connection, so it also works offline). Disabled when the scope kept nothing (the form
   arrived another way, e.g. as a call's reply). A call's reply replaces the scope *without* the kept
@@ -163,8 +172,8 @@ another Edge Function, `optimize-day-agent`), re-fetches just that day, and spli
 **the specific transcript block the button lived in** — not a global refresh — showing a result
 banner either way.
 
-Each row is a `WeekdayRecipeCard`: a 40px bar (name, kcal pill, and the optimised / suggestion /
-serving pills). Tapping it **slides icon buttons in at the right end of the bar**. Cards open and close
+Each row is a `WeekdayRecipeCard`: a 40px bar (name, kcal pill, and the optimised / suggestion
+pills). Tapping it **slides icon buttons in at the right end of the bar**. Cards open and close
 independently, so several can be open at once. The buttons are icon-only, in the colours of the icon table,
 each with an `aria-label` and `title`: **Info** (blue; shows or hides the six macro rings, `MacroRings`, one
 row, beneath the bar, then the entry's `notes` when it has any, as a small muted line with no label; closing the card hides them again), **View recipe** (green, only when the entry has a
@@ -175,15 +184,16 @@ follow it.
 
 The small line under the name (`slotRoleLabel` in `PlanTab.tsx`) reads `Dinner`, `Dinner ⋅ Side` for a non-main
 role, then the amount: `⋅ 50g` for a side, snack, breakfast food or ingredient (`quantity_g`), `⋅ 0.5 servings` for a recipe
-(`serving_multiplier`). A recipe-shaped side or snack has no gram amount on the card, so its line stops at
-the role.
+(`serving_multiplier`). A recipe-shaped side or snack (`side_kind` / `snack_kind` `recipe`) has no gram amount
+on the card, so it gets servings like a recipe: `Dinner ⋅ Side ⋅ 2 servings`.
 
 The stop-suggesting button (`lib/stop-suggesting.ts`) is a direct catalog call, like the snack list's:
 a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: false`: the optimizer stops
-picking it, the user can still add it by hand); a **side** gets "Remove from my sides" (`sides-catalog`
-`remove`). Both take the item from `catalog_uuid`, which `rowToMealCard` fills from
-`tbl_week_plan_entries.source_uuid` for side and snack entries (null for recipes and ingredients, which
-get no such button). A card in a chat reply is built by the agent and has no `catalog_uuid`, so the uuid is read from its `metadata` snapshot (`snack_uuid` / `side_uuid`) instead; without that the button does not show. The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
+picking it, the user can still add it by hand); a **breakfast** food item gets the same "Stop suggesting"
+(`breakfasts-catalog` `set_auto` with `breakfast_uuid` and `auto: false`); a **side** gets "Remove from my sides" (`sides-catalog`
+`remove`). All take the item from `catalog_uuid`, which `rowToMealCard` fills from
+`tbl_week_plan_entries.source_uuid` for side, snack and breakfast entries (null for recipes and ingredients, which
+get no such button). A card in a chat reply is built by the agent and has no `catalog_uuid`, so the uuid is read from its `metadata` snapshot (`snack_uuid` / `side_uuid` / `breakfast_uuid`) instead; without that the button does not show. The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
 and an Undo, is drawn inside the card with `UiBodyBlocks`, so Undo works with no extra code. It does not
 touch the planned entry: that stays on the day. The reply's Undo is drawn orange here (`buttonTone`, not the contract's default green), with a green OK on the same row at the right that just clears the reply from the card (`dismiss`, no call). A failed call shows an inline error. The recipe is fetched
 when View recipe is tapped (once per card), not when the card appears.
@@ -192,8 +202,8 @@ when View recipe is tapped (once per card), not when the card appears.
 entries, all with role `main` (nothing assumes one main per meal; every entry gets its own card). A food
 item is an entry of type `breakfast` (`source_uuid` = `breakfast_uuid`, `quantity_g`, snapshot with
 `breakfast_kind` / `display_name`); `rowToMealCard` builds its card like a snack food's, and its subtitle
-reads `Breakfast ⋅ 50g`. A recipe item is a plain `recipe` entry. A breakfast card gets no
-stop-suggesting button yet. The My breakfasts list itself, like My snacks, is the agent's `ui_body`
+reads `Breakfast ⋅ 50g`. A recipe item is a plain `recipe` entry. A breakfast food card gets the
+stop-suggesting button (above); a recipe item, being a recipe entry, does not. The My breakfasts list itself, like My snacks, is the agent's `ui_body`
 (`breakfasts-catalog`); the app has no screen of its own for it.
 
 `IngredientCard` (an `ingredients_list` suggestion, not a planned item) keeps the original behaviour: a
@@ -251,5 +261,5 @@ the exception: each patches only the one block its button lived in. See
   proxy to — not visible from this repo
 - `POST /api/recipe/submit`, `POST /api/recipe/collections`
 - Supabase RPC `link_user_recipe` — called directly from the client, not via an API route
-- `snacks-catalog` `set_auto` / `sides-catalog` `remove` (and their Undos) — a plan card's stop-suggesting
+- `snacks-catalog` `set_auto` / `breakfasts-catalog` `set_auto` / `sides-catalog` `remove` (and their Undos) — a plan card's stop-suggesting
   button, also called directly from the client; they change the user's catalog, not the planned entry

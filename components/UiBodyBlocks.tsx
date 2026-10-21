@@ -151,6 +151,22 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
   // since its reply would replace the groups.
   const busy = (scope: string) => (scope === ROOT_SCOPE ? anyPending : !!pending[scope] || !!pending[ROOT_SCOPE]);
 
+  // A list row (a button_group with an Info toggle or a switch) comes back from a Save or an Auto switch
+  // "open" (collapsed: false), which would leave it with no way to fold it again. Inside a slot such a row
+  // is made collapsible again and kept open, as the user left it. Groups that are just a sentence with
+  // Undo / Continue (Remove's reply) are not rows and stay as sent.
+  function keepRowsCollapsible(blocks: UiBlock[], container: string): UiBlock[] {
+    const opened: Record<string, boolean> = {};
+    const out = blocks.map((b): UiBlock => {
+      if (b.type !== "button_group" || b.collapsed) return b;
+      if (!b.buttons.some((btn) => btn.action?.kind === "toggle" || typeof btn.state === "boolean")) return b;
+      opened[key(container, b.id)] = true;
+      return { ...b, collapsed: true };
+    });
+    if (Object.keys(opened).length) setOpen((o) => ({ ...o, ...opened }));
+    return out;
+  }
+
   // `value` is what replaces "{value}" in the body: the chosen option, or a switch's new state (§4.2).
   // `switchKey` marks a switch's call, which is stricter than the general reply rules (§3.1.4): only a
   // reply with a ui_body counts, and anything else flips the switch back with an inline error.
@@ -166,7 +182,8 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
         throw new Error("switch call failed");
       }
       if (!reply) throw new Error("empty reply");
-      onChange((prev) => applyBlocks(prev, scope, reply.blocks, reply.version));
+      const blocks = scope === ROOT_SCOPE ? reply.blocks : keepRowsCollapsible(reply.blocks, scope);
+      onChange((prev) => applyBlocks(prev, scope, blocks, reply.version));
       if (switchKey) setSw((s) => without(s, switchKey)); // the reply's own state rules from here
     } catch {
       if (switchKey) setSw((s) => without(s, switchKey)); // flips back to the block's own state

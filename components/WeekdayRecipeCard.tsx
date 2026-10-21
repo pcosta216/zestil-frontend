@@ -5,7 +5,6 @@ import { Ban, BookOpenText, Info, Trash2 } from "@/lib/icons";
 import { MacroRings } from "@/components/MacroRings";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
 import { ORANGE, Spinner } from "@/components/ui-style";
-import { ServingInfo } from "./serving_info";
 import { RecipeDetailHero } from "./RecipeDetailHero";
 import { callEdge } from "@/lib/edge-call";
 import type { StopSuggesting } from "@/lib/stop-suggesting";
@@ -28,8 +27,6 @@ interface Props {
   macros?:             MacroSet;
   originalMacros?:     MacroSet;
   isOptimised?:        boolean;
-  servings_value?:     number;
-  serving_multiplier?: number;
   hasSuggestion?:      boolean;
   notes?:              string | null;
   recipeUuid?:         string;
@@ -43,7 +40,6 @@ interface Props {
 // closes on its own.
 export function WeekdayRecipeCard({
   title, subtitle, kcal, hasSuggestion, notes,
-  servings_value, serving_multiplier,
   recipeUuid, macros, originalMacros, isOptimised,
   onDelete, stopSuggesting,
 }: Props) {
@@ -167,12 +163,6 @@ export function WeekdayRecipeCard({
             >
               {showOriginal ? "original" : "✦ optimised"}
             </button>
-          )}
-
-          {serving_multiplier != null && servings_value != null && (
-            <span className="ml-1.0 flex-shrink-0">
-              <ServingInfo servingMultiplier={serving_multiplier} servingsValue={servings_value} />
-            </span>
           )}
 
           {displayKcal != null && (

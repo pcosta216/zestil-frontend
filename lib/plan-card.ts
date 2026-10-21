@@ -115,7 +115,7 @@ export function rowToMealCard(e: any) {
     agent_suggestion:   e.agent_suggestion ?? null,
     metadata:           snap,
     recipe_uuid:        snap.recipe_uuid ?? null,
-    // The catalog item (side_uuid or snack_uuid) behind a side or snack entry; null for the rest.
+    // The catalog item (side_uuid, snack_uuid or breakfast_uuid) behind a side, snack or breakfast entry; null for the rest.
     catalog_uuid:       isCatalog ? (e.source_uuid ?? null) : null,
     serving_multiplier: mult,
   };

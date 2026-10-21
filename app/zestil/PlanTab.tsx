@@ -328,7 +328,8 @@ function cap(s: string) {
 
 // "Lunch" for mains; "Lunch ⋅ Side" / "Dinner ⋅ Dessert" for non-main roles. A side, snack or ingredient
 // then gets its amount ("Dinner ⋅ Side ⋅ 50g"), a recipe its servings ("Dinner ⋅ 0.5 servings"). A side or
-// snack that is recipe-shaped has no gram amount on the card, so it gets none.
+// snack that is recipe-shaped has no gram amount on the card, so it gets servings like a recipe
+// ("Dinner ⋅ Side ⋅ 2 servings").
 function trimNum(n: number): string {
   return String(parseFloat(n.toFixed(2)));
 }
@@ -338,9 +339,11 @@ function slotRoleLabel(card: MealCard): string {
   const role = (card.role ?? "main").toLowerCase();
   const parts = [slot];
   if (role !== "main") parts.push(cap(role));
-  if ((card.entry_type === "snack" || card.entry_type === "side" || card.entry_type === "breakfast" || card.entry_type === "ingredient") && card.quantity_g != null) {
+  const isCatalog = card.entry_type === "snack" || card.entry_type === "side" || card.entry_type === "breakfast";
+  const isRecipeCatalog = isCatalog && (card.metadata?.side_kind ?? card.metadata?.snack_kind ?? card.metadata?.breakfast_kind) === "recipe";
+  if ((isCatalog || card.entry_type === "ingredient") && card.quantity_g != null) {
     parts.push(`${trimNum(card.quantity_g)}g`);
-  } else if (card.entry_type === "recipe" && card.serving_multiplier != null) {
+  } else if ((card.entry_type === "recipe" || isRecipeCatalog) && card.serving_multiplier != null) {
     parts.push(`${trimNum(card.serving_multiplier)} ${card.serving_multiplier === 1 ? "serving" : "servings"}`);
   }
   return parts.join(" ⋅ ");
@@ -396,8 +399,6 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   title={card.name}
                   subtitle={slotRoleLabel(card)}
                   kcal={card.macros?.kcal}
-                  servings_value={(card.entry_type === 'ingredient' || ((card.entry_type === 'side' || card.entry_type === 'snack' || card.entry_type === 'breakfast') && (card.metadata?.side_kind ?? card.metadata?.snack_kind ?? card.metadata?.breakfast_kind) === 'ingredient')) ? 1 : (card.metadata?.servings_value ?? card.metadata?.metadata?.servings_value)}
-                  serving_multiplier={card.serving_multiplier}
                   hasSuggestion={card.agent_suggestion?.status === "pending"}
                   notes={card.notes}
                   recipeUuid={card.recipe_uuid ?? card.metadata?.recipe_uuid ?? undefined}
@@ -454,10 +455,10 @@ const WELCOME_MESSAGE: AgentMessage = {
   id:           "welcome",
   type:         "agent",
   responseType: "info",
-  content:      "Hi! I'm your meal planner. Ask me to show your week, add a recipe, or adjust a day's macros.",
+  content:      "Hi! I'm your meal planner. Ask me to show your week, add a recipe, a snack or a side to your plan. You can start by saying \"plan my day\"",
 };
 
-const DEFAULT_QUICK_REPLIES = ["Show my week", "What's for dinner today?", "How are my macros?", "Add a recipe"];
+const DEFAULT_QUICK_REPLIES = ["List my snacks", "List my sides", "What options do I have for Breakfast?", "Plan today for me"];
 
 export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void; onCollectionCreated?: (c: { id: number; name: string }) => void }) {
   const supabase = createClient();
@@ -598,9 +599,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
     return cards;
   }, [syncDots]);
 
-  const appendDayView = useCallback(async (date: string, { setActive = true } = {}) => {
+  // `isCurrent` lets a caller drop the result if it was overtaken while the fetch ran (see the mount effect).
+  const appendDayView = useCallback(async (date: string, { setActive = true, isCurrent }: { setActive?: boolean; isCurrent?: () => boolean } = {}) => {
     const cards = await fetchDay(date);
-    if (!cards) return;
+    if (!cards || (isCurrent && !isCurrent())) return;
     if (setActive) activeDate.current = date;
     setMessages(prev => [...prev, {
       id:    `day-${date}-${Date.now()}`,
@@ -764,9 +766,21 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
     // memoised closure kept whichever date was selected when isTyping last flipped.
   }, [isTyping, selectedDate, appendDayView, appendWeekView]);
 
+  // Strict Mode (dev) and Fast Refresh run this effect, clean it up and run it again. Each run starts its own
+  // fetch, so without the cancelled flag both would land and today would be drawn twice.
+  // It also must not clear a chat that already has history: React can run a mounted component's effects
+  // again without remounting it (Fast Refresh after an edit, a boundary hiding and showing its content), and
+  // starting over then would wipe the conversation. A fresh mount has no history, so it still starts.
   useEffect(() => {
-    setMessages([WELCOME_MESSAGE]);
-    appendDayView(new Date().toLocaleDateString("en-CA")).catch(() => {});
+    if (messagesRef.current.length > 0) return;
+    let cancelled = false;
+    // Today's plan first, then the greeting under it (also when the plan could not be fetched).
+    appendDayView(new Date().toLocaleDateString("en-CA"), { isCurrent: () => !cancelled })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setMessages((prev) => (prev.some((m) => m.id === WELCOME_MESSAGE.id) ? prev : [...prev, WELCOME_MESSAGE]));
+      });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1100,7 +1114,6 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
       </div>
 
       <div className="flex items-center gap-2.5 px-3.5 py-2.5 pb-3 bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
-        <span className="w-1.5 h-1.5 rounded-full bg-green-mid flex-shrink-0" />
         <div className="flex-1 flex items-center">
           <textarea
             ref={textareaRef}
