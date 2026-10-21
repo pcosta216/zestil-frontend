@@ -8,9 +8,9 @@ Verify: `scripts/plan-seed/verify-plan-tab.mjs` — seeds real `tbl_week_plan_en
 recipe, optimised recipe, ingredient, and a delete target) for `doe@gmail.com` after walking her
 through onboarding for real goals data, then drives the tab in a browser
 
-One of five tabs in `AppShell` (`NAV_ITEMS`, `AppShell.tsx:110-160`) — first in the nav bar, but
-**not** the default: `activeTab = searchParams.get("tab") ?? "explore"` (`AppShell.tsx:25`), so
-Plan only shows once the URL carries `?tab=plan`. All five tab bodies mount at once and are
+One of five tabs in `AppShell` (`NAV_ITEMS`, `AppShell.tsx:110-160`) — first in the nav bar and the
+default: `activeTab = searchParams.get("tab") ?? "plan"` (`AppShell.tsx`), so `/zestil` with no `tab`
+(after login, onboarding, a password reset) opens on Plan, and the other tabs need `?tab=`. The Explore tab is currently switched off by `EXPLORE_ENABLED = false` in `AppShell.tsx` (no nav item, not mounted, `?tab=explore` opens Plan); set it to `true` to restore it. All five tab bodies mount at once and are
 toggled with a `hidden` class instead of being conditionally rendered (`AppShell.tsx:63-78`), so
 PlanTab's mount-time fetches and its whole chat/session state fire on page load and persist across
 tab switches regardless of which tab is in front. There's no `app/zestil/plan/` route — Plan is

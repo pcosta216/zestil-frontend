@@ -16,6 +16,11 @@ import type { ProfileBiometrics, ProfileSection } from "@/lib/profile";
 
 type Tab = "plan" | "explore" | "groceries" | "saved" | "profile";
 
+// The Explore tab is switched off while the app is tested without it: not in the nav bar, not mounted (so
+// none of its fetches or chat state run), and a `?tab=explore` link opens Plan. Set this to true to bring
+// it back; nothing else was removed.
+const EXPLORE_ENABLED = false;
+
 // True until the first AppShell of this document mounts: only that one renders the page the server has
 // just built. Back from a recipe page reuses the cached page, recipes and all.
 let documentLoad = true;
@@ -31,7 +36,8 @@ interface Props {
 
 export function AppShell({ user, initialRecipes, initialCollections, profile, biometrics, profileSections }: Props) {
   const searchParams = useSearchParams();
-  const activeTab = (searchParams.get("tab") as Tab) ?? "explore";
+  const requestedTab = (searchParams.get("tab") as Tab | null) ?? "plan";
+  const activeTab: Tab = requestedTab === "explore" && !EXPLORE_ENABLED ? "plan" : requestedTab;
   // Native replaceState syncs with useSearchParams without a server round-trip.
   // router.replace would re-run page.tsx (auth + 3 Supabase queries) on every
   // tab switch and delay the UI update until that finished.
@@ -121,9 +127,11 @@ export function AppShell({ user, initialRecipes, initialCollections, profile, bi
         <div className={activeTab === "plan" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <PlanTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
-        <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
-          <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
-        </div>
+        {EXPLORE_ENABLED && (
+          <div className={activeTab === "explore" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
+            <ExploreTab collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
+          </div>
+        )}
         <div className={activeTab === "saved" ? "flex-1 min-h-0 flex flex-col" : "hidden"}>
           <SavedTab active={activeTab === "saved"} recipes={recipes} collections={collections} onRecipeSaved={refreshRecipes} onCollectionCreated={addCollection} />
         </div>
@@ -137,7 +145,7 @@ export function AppShell({ user, initialRecipes, initialCollections, profile, bi
       </div>
 
       <nav className="flex bg-white border-t border-[rgba(0,0,0,0.07)] flex-shrink-0">
-        {NAV_ITEMS.map(({ id, label, icon }) => (
+        {NAV_ITEMS.filter(({ id }) => EXPLORE_ENABLED || id !== "explore").map(({ id, label, icon }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id as Tab)}

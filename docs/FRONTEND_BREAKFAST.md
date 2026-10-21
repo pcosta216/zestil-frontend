@@ -1,6 +1,6 @@
 # Breakfast from a list
 
-**For:** whoever maintains `zestil-frontend`. **From:** the agents repo, 2026-10-18. **Design:** `docs/planner-agent/BREAKFAST_CATALOG.md` (step 8, D45–D60). **Migrations:** `2026101701`–`06` (applied), `2026101810`, `2026101811`. **Functions:** `breakfasts-catalog` (new), the agents (`scripts/deploy-agents.sh`), `optimize-day-agent`.
+**For:** whoever maintains `zestil-frontend`. **From:** the agents repo, 2026-10-18. **Design:** `docs/planner-agent/BREAKFAST_CATALOG.md` (step 8, D45–D60). **Migrations:** `2026101701`–`06`, `2026101810`, `2026101811` (applied); `2026101812`, `2026101813` (the Breakfast Agent, to apply). **Functions:** `breakfasts-catalog` (new), `breakfast-agent` (new) and the other agents (`scripts/deploy-agents.sh`), `optimize-day-agent`.
 
 ## What it is
 
@@ -15,6 +15,7 @@
 3. **The My breakfasts screen,** like My snacks, from `breakfasts-catalog`. Add `breakfasts-catalog` to the endpoint allowlist (`docs/UI_BODY_CONTRACT.md` §4.1, §5.10).
 4. **The diet alert for an item added on that screen,** as for sides and snacks (`docs/FRONTEND_DIET_CHANGE.md`, item 3), with kind `breakfast`.
 5. **The Breakfast collection is protected,** like Snacks: the database refuses a rename, delete or move. A recipe added to it joins My breakfasts, and one taken out leaves; it works both ways.
+6. **The chat** (with the Breakfast Agent): "add Greek yogurt to my breakfasts", "remove the oats from my breakfasts", "what breakfasts do I have". The replies carry `ui_body` blocks like the snacks' (`docs/UI_BODY_CONTRACT.md` §5.2–§5.6, §5.10), calling `breakfasts-catalog`: the added item with an Undo, a removal with an Undo, a new default with an Undo, the Auto switch, and the choice when several items match. Once item 3 adds the endpoint to the allowlist, nothing else is needed.
 
 ## The `breakfast` entry
 
