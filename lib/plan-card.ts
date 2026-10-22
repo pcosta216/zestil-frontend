@@ -11,7 +11,7 @@
 // or the breakfast list item's breakfast_uuid.
 // It is how a plan card can ask the catalog to stop suggesting that item.
 
-import { currentQtyG, originalQtyG } from "@/lib/entry-quantity";
+import { currentQtyG, originalMultiplier, originalQtyG } from "@/lib/entry-quantity";
 
 export const PLAN_ENTRY_COLUMNS =
   "entry_id, entry_date, meal_slot, entry_type, role, macros, agent_suggestion, confirmed, " +
@@ -82,13 +82,15 @@ export function rowToMealCard(e: any) {
   // baseline, the card needs what is on the plate now.
   const curQty  = currentQtyG(e);
   const origQty = originalQtyG(e);
+  // The same for servings: an entry sized in servings is worked out at the servings before its first change.
+  const origMult = originalMultiplier(e);
 
   let originalMacros: Record<string, number> | undefined;
   if (isOptimised && e.original_snapshot) {
     originalMacros = isRecipeCatalog
-      ? scaleMacros(e.original_snapshot.macros_per_serving, mult)
+      ? scaleMacros(e.original_snapshot.macros_per_serving, origMult)
       : isRecipeShaped
-        ? extractRecipeMacros(e.original_snapshot, mult)
+        ? extractRecipeMacros(e.original_snapshot, origMult)
         : extractIngredientMacros(e.original_snapshot, origQty);
   }
 

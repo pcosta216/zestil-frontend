@@ -7,7 +7,12 @@
 //   quantity_g column                 → the CURRENT amount on the plate
 //   adjusted_snapshot.original_qty_g  → what it was before the FIRST adjustment
 //
-// Both readers tolerate legacy rows written before 2026-09-03, when the optimizer left
+// And for entries sized in servings (a recipe, or a side, snack or breakfast item of kind 'recipe'):
+//   serving_multiplier column              → the CURRENT servings on the plate
+//   adjusted_snapshot.original_multiplier  → the servings before the FIRST change (since 2026-10-21;
+//                                            docs/FRONTEND_ORIGINAL_SERVINGS.md)
+//
+// The quantity readers tolerate legacy rows written before 2026-09-03, when the optimizer left
 // quantity_g at the original and put the current amount in adjusted_snapshot.adjusted_qty_g
 // (a key nothing ever read). See OPTIMIZER_AGENT.md §11.1.
 
@@ -34,4 +39,10 @@ export function originalQtyG(entry: any): number {
 
   // No stamp means either never-adjusted or legacy — in both cases the column is original.
   return positive(entry?.quantity_g) ?? DEFAULT_QTY_G;
+}
+
+/** The servings originally planned — the baseline for the original macros of an entry sized in servings. */
+export function originalMultiplier(entry: any): number {
+  // No stamp means never changed, or changed before 2026-10-21: the column is all there is.
+  return positive(entry?.adjusted_snapshot?.original_multiplier) ?? positive(entry?.serving_multiplier) ?? 1;
 }

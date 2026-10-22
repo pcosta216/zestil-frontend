@@ -349,7 +349,7 @@ function slotRoleLabel(card: MealCard): string {
   return parts.join(" ⋅ ");
 }
 
-function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisingDate }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void; onOptimise?: (date: string) => void; optimisingDate?: string | null }) {
+function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisingDate, onFeedback, onRecipeSaved }: { cards: MealCard[]; goals: MacroData | null; mealSlots: string[]; onDeleteEntry?: (entryId: string) => void; onOptimise?: (date: string) => void; optimisingDate?: string | null; onFeedback?: (b: { type: "success" | "error"; message: string }) => void; onRecipeSaved?: () => void }) {
   const groups = groupByDay(cards);
   const sortedGroups = Array.from(groups.entries()).sort(([, a], [, b]) => {
     const dateA = a.find(c => c.date)?.date ?? "";
@@ -407,6 +407,10 @@ function DayGrids({ cards, goals, mealSlots, onDeleteEntry, onOptimise, optimisi
                   isOptimised={card.is_optimised}
                   onDelete={() => onDeleteEntry?.(card.entry_id)}
                   stopSuggesting={stopSuggestingFor(card)}
+                  canToggleAutoPlanning={card.entry_type === "recipe" && !!(card.recipe_uuid ?? card.metadata?.recipe_uuid)}
+                  onFeedback={onFeedback}
+                  snapshot={card.metadata}
+                  onRecipeSaved={onRecipeSaved}
                 />
               ))
             )}
@@ -862,6 +866,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                 onDeleteEntry={(entryId) => handleDeleteEntry(entryId, msg.id)}
                 onOptimise={(date) => handleOptimise(date, msg.id)}
                 optimisingDate={optimisingDate}
+                onFeedback={showBanner}
+                onRecipeSaved={onRecipeSaved}
               />
             </div>
           ) : msg.type === "user" ? (
@@ -1023,6 +1029,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                   onDeleteEntry={(entryId) => handleDeleteEntry(entryId, msg.id)}
                   onOptimise={(date) => handleOptimise(date, msg.id)}
                   optimisingDate={optimisingDate}
+                  onFeedback={showBanner}
+                  onRecipeSaved={onRecipeSaved}
                 />
               )}
               {msg.responseType === "ingredients_list" && (msg.ingredientCards?.length ?? 0) > 0 && (

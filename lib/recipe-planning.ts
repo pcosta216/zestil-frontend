@@ -52,6 +52,32 @@ export async function setRecipePlanning(recipeUuid: string, inPlanning: boolean)
   return data as SetRecipePlanning;
 }
 
+/** What the recipe page and the plan card say after the switch is flipped; `dietWhy` is the diet reason it carried before. */
+export function planningMessage(title: string | null | undefined, nowInPlanning: boolean, dietWhy: string | null): string {
+  const subject = title ? `"${title}"` : "This recipe";
+  if (!nowInPlanning) return `${subject} won't be used in automatic planning. You can still add it to a day yourself.`;
+  return dietWhy
+    ? `${subject} is back in automatic planning, even though it's ${dietWhy}.`
+    : `${subject} is back in automatic planning.`;
+}
+
+/** One recipe's auto_plan and the diet's reason, read from the view (the plan card has no recipe row to read them from). */
+export async function loadRecipePlanState(recipeUuid: string): Promise<{ autoPlan: boolean | null; why: string | null }> {
+  const supabase = createClient();
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session) throw new Error("no session");
+  const { data, error } = await supabase
+    .from("viw_user_collection_set")
+    .select("auto_plan, auto_reason")
+    .eq("account_key", session.user.id)
+    .eq("recipe_uuid", recipeUuid)
+    .limit(1);
+  if (error) throw new Error(error.message);
+  const row = (data ?? [])[0] as { auto_plan: boolean | null; auto_reason: string | null } | undefined;
+  const autoPlan = typeof row?.auto_plan === "boolean" ? row.auto_plan : null;
+  return { autoPlan, why: autoPlan === false ? dietReason(row?.auto_reason) : null };
+}
+
 /**
  * "not keto" from a recipe's auto_reason ("diet:keto"; a bare "keto" reads the same), null for "user" or
  * none. The database words it 'not ' || lower(label): every diet's label is its name capitalised, bar

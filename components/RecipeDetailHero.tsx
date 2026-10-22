@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { Trash2, Plus } from "@/lib/icons";
+import { Heart, Trash2, Plus } from "@/lib/icons";
+import { createClient } from "@/lib/supabase/browser";
+import { announceItemSaved } from "@/lib/diet";
 import type { RecipeCollection, Collection } from "@/lib/supabase/queries";
 import { isValidUrl, formatTime, formatDate } from "@/lib/recipe-format";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
@@ -23,8 +25,22 @@ function parseInlineMarkdown(text: string): React.ReactNode[] {
   });
 }
 
-export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: RecipeCollection; asOverlay?: boolean }) {
+// `saved`: whether the recipe is one of the user's. The recipe page always is (the default); the Plan tab's
+// overlay opens a recipe from a plan entry, which may not be: it passes null while it finds out, then false
+// or true. A recipe that is not the user's gets a Save button at the bottom instead of Delete, and no
+// collections yet (they are added once it is saved). `onSaved` tells the caller the user's recipes changed.
+export function RecipeDetailHero({ recipe, asOverlay = false, saved = true, onSaved }: {
+  recipe: RecipeCollection;
+  asOverlay?: boolean;
+  saved?: boolean | null;
+  onSaved?: () => void;
+}) {
   const router = useRouter();
+  const [isSaved, setIsSaved] = useState<boolean | null>(saved);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [saveBanner, setSaveBanner] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const saveBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (saveBannerTimer.current) clearTimeout(saveBannerTimer.current); }, []);
   const [showConfirm, setShowConfirm] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [collectionNames, setCollectionNames] = useState<string[]>(recipe.collection_names ?? []);
@@ -38,7 +54,38 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
     (c) => c.name.toLowerCase() !== "main" && !collectionNames.includes(c.name)
   );
   const imageUrl = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
-  const planning = useRecipePlanningSwitch(recipe.recipe_uuid, recipe.meal_title, recipe.auto_plan, recipe.auto_reason);
+  // A recipe that is not the user's has no auto_plan to read, and may still be kept out of planning: the switch
+  // shows, taken as on until it is flipped. While it is still being found out, no switch.
+  const planning = useRecipePlanningSwitch(
+    recipe.recipe_uuid,
+    recipe.meal_title,
+    isSaved === null ? null : isSaved ? recipe.auto_plan : (recipe.auto_plan ?? true),
+    recipe.auto_reason,
+  );
+
+  function showSaveBanner(b: { type: "success" | "error"; message: string }) {
+    if (saveBannerTimer.current) clearTimeout(saveBannerTimer.current);
+    setSaveBanner(b);
+    saveBannerTimer.current = setTimeout(() => setSaveBanner(null), 5000);
+  }
+
+  // The same link the Plan chat's heart makes for a recipe that already exists.
+  async function handleSave() {
+    if (savingRecipe) return;
+    setSavingRecipe(true);
+    try {
+      const { error } = await createClient().rpc("link_user_recipe", { p_recipe_uuid: recipe.recipe_uuid });
+      if (error) throw new Error(error.message);
+      setIsSaved(true);
+      showSaveBanner({ type: "success", message: recipe.meal_title ? `"${recipe.meal_title}" saved to your recipes.` : "Recipe saved to your recipes." });
+      announceItemSaved("recipe", recipe.recipe_uuid);
+      onSaved?.();
+    } catch {
+      showSaveBanner({ type: "error", message: "Couldn't save the recipe. Please try again." });
+    } finally {
+      setSavingRecipe(false);
+    }
+  }
 
   async function handleDelete() {
     setDeleting(true);
@@ -225,6 +272,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
         })()}
 
         {/* Collection labels */}
+        {isSaved && (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs text-text-muted">Collections</span>
           <button
@@ -240,6 +288,7 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
             </span>
           ))}
         </div>
+        )}
 
         {/* Macros */}
         {recipe.recipe_data?.recipe_totals && recipe.recipe_data.recipe_totals.length > 0 && (() => {
@@ -300,8 +349,20 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
           );
         })()}
 
+        {/* Save, for a recipe that is not the user's */}
+        {isSaved === false && (
+          <button
+            onClick={handleSave}
+            disabled={savingRecipe}
+            className="flex items-center justify-center gap-2 w-full bg-green-primary hover:bg-green-dark active:bg-green-dark transition-colors text-white text-sm font-medium rounded-xl px-4 py-3 disabled:opacity-60"
+          >
+            <Heart size={16} strokeWidth={2} />
+            {savingRecipe ? "Saving…" : "Save recipe"}
+          </button>
+        )}
+
         {/* Delete */}
-        {!asOverlay && (
+        {!asOverlay && isSaved && (
           <button
             onClick={() => setShowConfirm(true)}
             className="flex items-center justify-center gap-2 w-full bg-red-500 hover:bg-red-600 active:bg-red-700 transition-colors text-white text-sm font-medium rounded-xl px-4 py-3"
@@ -400,11 +461,16 @@ export function RecipeDetailHero({ recipe, asOverlay = false }: { recipe: Recipe
 
       {/* The planning switch's feedback — slides in from the bottom, same pattern as the tabs' save
           banner. z-[70]: above the collection picker (z-[60]), and inside the Plan tab's z-50 overlay. */}
-      <div className={`fixed bottom-4 left-4 right-4 z-[70] transition-all duration-300 ease-out ${planning.banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
-        <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${planning.banner?.type === "error" ? "bg-red-500" : "bg-green-primary"}`}>
-          {planning.banner?.message}
-        </div>
-      </div>
+      {(() => {
+        const banner = saveBanner ?? planning.banner;
+        return (
+          <div className={`fixed bottom-4 left-4 right-4 z-[70] transition-all duration-300 ease-out ${banner ? "translate-y-0 opacity-100" : "translate-y-[120%] opacity-0 pointer-events-none"}`}>
+            <div className={`rounded-2xl px-4 py-3 text-[13px] font-medium text-white shadow-lg ${banner?.type === "error" ? "bg-red-500" : "bg-green-primary"}`}>
+              {banner?.message}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

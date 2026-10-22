@@ -7,7 +7,7 @@ import { MiniMarkdown } from "@/components/MiniMarkdown";
 import { CARD, CELL, GROUP_COLS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, SwitchTrack, TONES } from "@/components/ui-style";
 import { ArrowLeftRight, Ban, Check, ChevronDown, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
 import {
-  ROOT_SCOPE, applyBlocks, applyReplace, applyRevert, findNutrition, groupScope, isAllowedCall, previousOf,
+  ROOT_SCOPE, applyBlocks, applyReplace, findNutrition, groupScope, isAllowedCall, previousOf,
   type UiBlock, type UiBody, type UiButton, type UiCallAction, type UiTone,
 } from "@/lib/ui-body";
 
@@ -151,20 +151,33 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
   // since its reply would replace the groups.
   const busy = (scope: string) => (scope === ROOT_SCOPE ? anyPending : !!pending[scope] || !!pending[ROOT_SCOPE]);
 
-  // A list row (a button_group with an Info toggle or a switch) comes back from a Save or an Auto switch
-  // "open" (collapsed: false), which would leave it with no way to fold it again. Inside a slot such a row
-  // is made collapsible again and kept open, as the user left it. Groups that are just a sentence with
-  // Undo / Continue (Remove's reply) are not rows and stay as sent.
+  // A list row (a button_group with Remove, Info or Edit, an Info toggle or a switch) comes back from a Save,
+  // an Auto switch or an Undo "open" (collapsed: false), which would leave it with no way to fold it again.
+  // Inside a slot such a row is made collapsible again and kept open, as the user left it. A row whose
+  // Info or Edit is a placeholder (no macros, no amounts) still counts, by its icon. Groups that are just a
+  // sentence with Undo / Continue (Remove's reply), or a Removed row with only Restore, are not rows and
+  // stay as sent.
+  const isRowButton = (btn: UiButton) =>
+    btn.action?.kind === "toggle" || typeof btn.state === "boolean" || btn.icon === "trash" || btn.icon === "info" || btn.icon === "edit";
   function keepRowsCollapsible(blocks: UiBlock[], container: string): UiBlock[] {
     const opened: Record<string, boolean> = {};
     const out = blocks.map((b): UiBlock => {
       if (b.type !== "button_group" || b.collapsed) return b;
-      if (!b.buttons.some((btn) => btn.action?.kind === "toggle" || typeof btn.state === "boolean")) return b;
+      if (!b.buttons.some(isRowButton)) return b;
       opened[key(container, b.id)] = true;
       return { ...b, collapsed: true };
     });
     if (Object.keys(opened).length) setOpen((o) => ({ ...o, ...opened }));
     return out;
+  }
+
+  // `revert` (§4.7) puts back the row Edit swapped out. That row was open (collapsed: false) when it was
+  // kept, so it too is made collapsible again, as after a call.
+  function revertScope(scope: string) {
+    const kept = previousOf(uiBody, scope);
+    if (!kept) return;
+    const blocks = scope === ROOT_SCOPE ? kept : keepRowsCollapsible(kept, scope);
+    onChange((prev) => applyBlocks(prev, scope, blocks, prev.version));
   }
 
   // `value` is what replaces "{value}" in the body: the chosen option, or a switch's new state (§4.2).
@@ -273,7 +286,7 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
     // out is kept for `revert`.
     else if (action?.kind === "replace") onClick = () => onChange((prev) => applyReplace(prev, actionScope, action.blocks, (old) => bake(old, scope)));
     // Local too (§4.7): puts that back. Nothing kept (the form arrived another way): nothing to do, so disabled.
-    else if (action?.kind === "revert" && previousOf(uiBody, actionScope)) onClick = () => onChange((prev) => applyRevert(prev, actionScope));
+    else if (action?.kind === "revert" && previousOf(uiBody, actionScope)) onClick = () => revertScope(actionScope);
     const Icon = btn.icon ? ICONS[btn.icon] : undefined;
     return (
       <button
@@ -343,7 +356,7 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
           : cancelAction?.kind === "replace"
             ? () => onChange((prev) => applyReplace(prev, scope, cancelAction.blocks, (old) => bake(old, scope)))
             : cancelAction?.kind === "revert" && previousOf(uiBody, scope)
-              ? () => onChange((prev) => applyRevert(prev, scope))
+              ? () => revertScope(scope)
               : undefined;
         return (
           <ChoiceBlock
@@ -486,6 +499,32 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
       // of groups already is cards, so a card around them would be a card in a card.
       const slotScope = groupScope(block.id);
       const isCards = block.blocks.every((b) => b.type === "button_group" || b.type === "nutrition");
+      // A row that Edit swapped for its form keeps its name and fold control: the form is the row's body.
+      // `previous` is the row Edit replaced; the form stays mounted while folded, so its pick is kept.
+      const editedRow = block.previous?.find((b): b is Extract<UiBlock, { type: "button_group" }> => b.type === "button_group" && b.buttons.some(isRowButton));
+      if (editedRow && !isCards) {
+        const foldKey = key(slotScope, "edit_fold");
+        const isOpen = open[foldKey] ?? true;
+        return (
+          <div key={k} className={`${CARD} flex flex-col`}>
+            <button
+              aria-expanded={isOpen}
+              onClick={() => setOpen((o) => ({ ...o, [foldKey]: !isOpen }))}
+              className="flex items-center gap-2 px-3 py-2 w-full outline-none"
+            >
+              <span className="flex-1 min-w-0 flex flex-col items-start text-left">
+                <span className="font-display text-[12px] leading-tight w-full truncate">{editedRow.caption}</span>
+                {editedRow.detail && <span className="text-[9px] text-text-muted leading-tight">{editedRow.detail}</span>}
+              </span>
+              <ChevronDown size={14} className={`text-text-muted flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+            </button>
+            <div className={`px-3 pb-2.5 pt-1.5 flex flex-col gap-2 ${isOpen ? "" : "hidden"}`}>
+              {renderBlocks(block.blocks, slotScope)}
+              {errors[slotScope] && <div className="text-[11px] text-red-500">{errors[slotScope]}</div>}
+            </div>
+          </div>
+        );
+      }
       return (
         <div key={k} className={isCards ? "flex flex-col gap-2" : `${CARD} px-3 py-2.5 flex flex-col gap-2`}>
           {renderBlocks(block.blocks, slotScope)}

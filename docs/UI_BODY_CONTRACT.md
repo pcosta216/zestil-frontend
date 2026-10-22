@@ -22,6 +22,7 @@ Section numbers stay stable: code comments and migrations cite them ("§5.6").
 | Sides: add_to_my_sides with Undo | §5.8 | 2026-10-13 | — | `sides-agent` (`scripts/deploy-agents.sh`) |
 | Lists from the router's fast path, and the endpoints' `view: "cards"` (the app screens) | §5.6, §5.7 | 2026-10-11 | `2026101101` | `router-agent`, `planner-agent`, `sides-catalog`, `snacks-catalog` |
 | Diet alert on an added side or snack | §5.9 | 2026-10-15 | `2026101501` | `sides-agent`, `snacks-agent`, `sides-catalog`, `snacks-catalog` |
+| Breakfasts: the list (My breakfasts) | §5.10 | 2026-10-17 | — | `breakfasts-catalog` (new); the app: the allowlist row (§4.1) |
 
 Order for the snack list: the frontend renderer, then `planner-agent` and `snacks-catalog`, then `2026101001` and `2026101002`. `2026101003` can go at any time ([`planner-agent/DECISIONS.md`](planner-agent/DECISIONS.md)). Elsewhere in this doc, a date marks when the owner decided a rule ("owner, 2026-10-10"), not a status.
 
@@ -417,6 +418,7 @@ The UI sends `POST {SUPABASE_URL}/functions/v1/{endpoint}`, with `Authorization:
 |---|---|
 | `sides-catalog` | §5.1–5.4, §5.7 |
 | `snacks-catalog` | §5.5–5.6 |
+| `breakfasts-catalog` | §5.10 |
 
 **Every endpoint in the allowlist:**
 - **takes the account from the JWT.** `body` never contains `user_id` or `account_key`. The endpoint refuses a `user_id` that disagrees with the JWT, so a tampered payload can't act on another account;
@@ -818,6 +820,51 @@ When a side or snack the user just added (`add_to_my_sides`, `add_to_my_snacks`)
 - **Until the user answers,** the item is planned: nothing added is kept out by itself (owner).
 - **The app:** nothing new to build. It is the usual group and `call`. For items added from the app's own screens, see [`FRONTEND_DIET_CHANGE.md`](FRONTEND_DIET_CHANGE.md).
 - **Builders:** `dietAlertBlocks`, `dietPlanningMessage`. **Tool side:** `withDietAlert` in `_shared/agent/tool-handlers.ts`. **Database:** `item_fits_diet`, `set_diet_planning` (`2026101501`).
+- **Breakfasts:** the same, on `breakfasts-catalog`, with `breakfast_uuid` (§5.10).
+
+### 5.10 My breakfasts: the breakfast list
+
+**Status:** built 2026-10-17 (step 8, [`planner-agent/BREAKFAST_CATALOG.md`](planner-agent/BREAKFAST_CATALOG.md) §11). It's the snack list (§5.6) for breakfasts, built from the same builders with `catalog: 'breakfasts'`: `breakfasts-catalog` (its `view: "list"` and `view: "removed"` replies, and `action: "list", view: "cards"` for the app screen) calls them. The Breakfast Agent's `list_my_breakfasts` and the router's fast path come next. Status of deploys: the table at the top.
+
+Everything in §5.6 holds, with these differences:
+
+| | Snack list (§5.6) | Breakfast list |
+|---|---|---|
+| Endpoint and payload id | `snacks-catalog`, `snack_uuid` | `breakfasts-catalog`, `breakfast_uuid` |
+| Sections | Categories (`tbl_snack_categories`), "3 snacks" | Categories (`tbl_breakfast_categories`), "3 items": a breakfast is made of several items |
+| Row ids | `snack_{8}` | `breakfast_{8}` |
+| Row buttons | Remove · Info · Edit · **Auto** switch | The same. Auto: the planner may put the item in a breakfast by itself |
+| Removed section | `removed_snacks` | `removed_breakfasts` |
+| Help note | `tbl_ui_help` `snack_list` | `tbl_ui_help` `breakfast_list` (comes with the Breakfast Agent; none until then) |
+| Fixed reply line | "You have 27 snack options across 6 categories:" | "You have 34 breakfast options across 8 categories:", or "…in Eggs:" for one category |
+| One row per | Food | Food prepared one way: the user's own "Boiled egg" replaces Zestil's boiled egg, not its fried egg |
+
+The words: "Removed "Oats" from your breakfasts.", "Restored "Oats" to your breakfasts.", "No breakfast item named "kippers" is in your list.", "Croissant can now be picked automatically for your breakfasts."
+
+**The chat (2026-10-18, with the Breakfast Agent; `2026101812` and the deploy pending).** The agent's tools reply with the snacks' blocks (§5.2–§5.5) on `breakfasts-catalog`:
+- `add_to_my_breakfasts`: the added item and an Undo that removes it, as `add_to_my_snacks` does (`addItemBlocks`). "Added "Ricotta cheese" to your breakfasts (dairy). It can be picked automatically for your breakfasts." An item already on the list gets the text only. One restored from Removed gets "Restored "Oats" to your breakfasts.", with no Undo.
+- `remove_from_my_breakfasts`, `adjust_my_breakfast`, `set_my_breakfast_auto`: §5.2–§5.5, on `breakfasts-catalog`. Several matches give the choice block.
+- `list_my_breakfasts`: this list. The fast path answers "what breakfasts do I have", and the help note `breakfast_list` is in `2026101812`.
+
+**The app's part:** add `breakfasts-catalog` to the endpoint allowlist (§4.1), and a My breakfasts screen that renders `action: "list", view: "cards"` as My snacks does. Nothing else is new.
+
+### 5.11 Opening the recipe of a plan entry: `original_snapshot.recipe_uuid`
+
+**Status:** built 2026-10-22 (owner). Deploy pending: `scripts/deploy-agents.sh` and `optimize-day-agent`; migration `2026102210` fills the entries written before.
+
+**The rule for the app:** for any plan entry, when `original_snapshot.recipe_uuid` is set, the entry is a recipe and opens that recipe. Load it by that id, whether or not it is in the user's collections: Zestil's recipe snacks and sides are not.
+
+| Entry | `entry_type` | `source_uuid` | `original_snapshot.recipe_uuid` |
+|---|---|---|---|
+| A recipe at any meal, a breakfast recipe included | `recipe` | the recipe | the recipe (always set) |
+| A snack that is a recipe | `snack` | the snack (`snack_uuid`) | the recipe (new) |
+| A side that is a recipe | `side` | the side (`side_uuid`) | the recipe (new) |
+| A food: a snack, a side or a breakfast item | `snack` / `side` / `breakfast` / `ingredient` | the list item, or the food | not set |
+
+- **`source_uuid` stays the list item** for snacks and sides: Remove, Undo and the one-a-day check use it.
+- **`adjusted_snapshot`**, when set, is a copy of the snapshot with the amount before a change: it carries `recipe_uuid` too.
+- **In chat replies,** a meal card's `metadata` is the snapshot, so the key is there as well.
+- **A recipe the user has since deleted:** the id stays on the entry. Show the entry from its snapshot (name, macros) and say the recipe is no longer available.
 
 ## 6. Implementation notes (agent side)
 

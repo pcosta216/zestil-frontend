@@ -128,11 +128,15 @@ Actions:
   Continue). No pending state. What it swaps out is **kept** for `revert`: on the slot it creates (or
   on the body, for a body-level scope), written by the same state update as the swap, one level, only
   the latest swap. For a group that is the group and its macros panel; for a slot, its blocks.
-- A list row that comes back from a call (the reply to Save or to the Auto switch) is `collapsed: false` in
-  the contract, which would leave an open row with no way to fold it. `keepRowsCollapsible` in
-  `UiBodyBlocks.tsx` makes such a row collapsible again, and keeps it open, when it arrives inside a slot. A
-  "row" is a `button_group` with an Info toggle or a switch; Remove's sentence-plus-Undo group is not one and
-  stays as sent.
+- A list row that comes back from a call (the reply to Save, to the Auto switch or to an Undo) is
+  `collapsed: false` in the contract, which would leave an open row with no way to fold it.
+  `keepRowsCollapsible` in `UiBodyBlocks.tsx` makes such a row collapsible again, and keeps it open, when it
+  arrives inside a slot. A "row" is a `button_group` with a trash / info / edit button, an Info toggle or a
+  switch (so a snack or side with no macros, whose Info is a placeholder, still counts). Remove's
+  sentence-plus-Undo group and a Removed row with only Restore are not rows and stay as sent.
+  Edit's form keeps the row's fold control too: a slot whose `previous` holds a row is drawn as a card with
+  the row's name, detail and chevron over the form (kept mounted while folded, so the pick survives), and
+  Cancel (`revert`) puts the row back collapsible, through the same helper.
 - `revert`: local, puts back what the last `replace` kept and forgets it (the snack Edit form's
   Cancel — no connection, so it also works offline). Disabled when the scope kept nothing (the form
   arrived another way, e.g. as a call's reply). A call's reply replaces the scope *without* the kept
@@ -177,7 +181,7 @@ pills). Tapping it **slides icon buttons in at the right end of the bar**. Cards
 independently, so several can be open at once. The buttons are icon-only, in the colours of the icon table,
 each with an `aria-label` and `title`: **Info** (blue; shows or hides the six macro rings, `MacroRings`, one
 row, beneath the bar, then the entry's `notes` when it has any, as a small muted line with no label; closing the card hides them again), **View recipe** (green, only when the entry has a
-`recipe_uuid`), for a side or a snack a grey button that stops suggesting the item, and **Delete** (red,
+`recipe_uuid`), for a side or a snack a grey button that stops suggesting the item, for a recipe entry a grey **Stop auto planning** / **Use in auto planning** button (see below), and **Delete** (red,
 `onDelete`), always the right-most so it keeps its place. While open, the "optimised" and "suggestion"
 pills are hidden to make room, so the original / optimised switch is used while closed and the rings
 follow it.
@@ -187,6 +191,16 @@ role, then the amount: `⋅ 50g` for a side, snack, breakfast food or ingredient
 (`serving_multiplier`). A recipe-shaped side or snack (`side_kind` / `snack_kind` `recipe`) has no gram amount
 on the card, so it gets servings like a recipe: `Dinner ⋅ Side ⋅ 2 servings`.
 
+**Stop auto planning** (a `recipe` entry with a recipe) is the recipe page's "Auto-plan" switch
+(`components/PlanningSwitch.tsx`) on the card: the same `setRecipePlanning` (`set_recipe_planning`, with the
+signed-in user's id), the same words (`planningMessage`), and the same `rememberAutoPlan` +
+`announcePlanningChanged` afterwards so the Saved tab's triangles follow. The card reads the recipe's
+`auto_plan` / `auto_reason` from `viw_user_collection_set` the first time it is opened
+(`loadRecipePlanState`), because a plan entry does not carry them; until that lands the button reads "Stop".
+Once the recipe is out, the same button reads "Use in auto planning" and flips it back (naming the diet when
+only the diet had kept it out). The result shows in `PlanTab`'s bottom banner (`onFeedback` = `showBanner`),
+and an entry that is not planned by hand is unaffected: it only changes what the optimizer may pick.
+
 The stop-suggesting button (`lib/stop-suggesting.ts`) is a direct catalog call, like the snack list's:
 a **snack** gets "Stop suggesting" (`snacks-catalog` `set_auto` with `auto: false`: the optimizer stops
 picking it, the user can still add it by hand); a **breakfast** food item gets the same "Stop suggesting"
@@ -195,8 +209,35 @@ picking it, the user can still add it by hand); a **breakfast** food item gets t
 `tbl_week_plan_entries.source_uuid` for side, snack and breakfast entries (null for recipes and ingredients, which
 get no such button). A card in a chat reply is built by the agent and has no `catalog_uuid`, so the uuid is read from its `metadata` snapshot (`snack_uuid` / `side_uuid` / `breakfast_uuid`) instead; without that the button does not show. The call goes through `lib/edge-call.ts`, and the endpoint's own reply, a sentence
 and an Undo, is drawn inside the card with `UiBodyBlocks`, so Undo works with no extra code. It does not
-touch the planned entry: that stays on the day. The reply's Undo is drawn orange here (`buttonTone`, not the contract's default green), with a green OK on the same row at the right that just clears the reply from the card (`dismiss`, no call). A failed call shows an inline error. The recipe is fetched
+touch the planned entry: that stays on the day. The reply's Undo is drawn orange here (`buttonTone`, not the contract's default green), with a green OK on the same row at the right that just clears the reply from the card (`dismiss`, no call). A failed call shows an inline error. The recipe is read
 when View recipe is tapped (once per card), not when the card appears.
+
+**View recipe** (`WeekdayRecipeCard.openRecipe`, `docs/UI_BODY_CONTRACT.md` §5.11) shows on any entry
+whose snapshot names a recipe (`recipe_uuid`): a `recipe` entry, and since the 2026-10-22 backend change a
+snack or side that is a recipe (their `source_uuid` stays the list item). Nothing is read until it's tapped.
+Then:
+- `/api/recipe/{uuid}` asks the user's recipes (`viw_user_collection_set`). A hit is the live recipe with its
+  collections, and that's all.
+- Otherwise the recipe is read by its id with `get_recipe_json_by_uuid` (`loadRecipeById` in
+  `lib/recipe-snapshot.ts`, with the user's login), whether or not the user has it: the planner's own
+  snapshot function, so the result has the snapshot's shape. A snack or side carries only the id, so that
+  read starts at once and the overlay says "Loading…". A `recipe` entry's snapshot is the whole recipe
+  (`recipeFromSnapshot`: title, lines, steps, totals, and whatever of servings, times, author, date, link
+  and image `metadata` has) and shows at once; its read by id is made only after the user's recipes said no,
+  to tell whether the recipe still exists.
+- Not the user's: the overlay (`RecipeDetailHero`, `saved={false}`) shows a **Save recipe** button at the
+  bottom (the recipe page's Delete never shows in the overlay) and no collections row. Save is the Plan chat
+  heart's link, `link_user_recipe`, then the diet alert (`announceItemSaved`) and `onRecipeSaved` (Saved tab
+  refresh); after it the collections row appears so it can be filed. While the lookups run
+  (`saved={null}`) there is no Save and no collections row.
+- No longer exists (the read by id finds nothing): the entry's name and macros, and "This recipe is no
+  longer available."
+- A read that fails: a `recipe` entry keeps its snapshot (still with Save when the user's recipes said no);
+  a snack or side says "Couldn't load the recipe.", and the next tap tries again.
+
+The page's "Auto-plan" switch shows for an unsaved recipe too, taken as on, and so does the
+card's Stop auto planning button: the user can stop a recipe Zestil planned before ever saving it. An
+unsaved recipe has no `auto_plan` to read back, so after a reload the switch starts as on again.
 
 **Breakfast.** The planner composes a breakfast from the My breakfasts list, so one slot can hold several
 entries, all with role `main` (nothing assumes one main per meal; every entry gets its own card). A food
@@ -213,6 +254,12 @@ have nothing to open for a bare ingredient name, so they now just close the menu
 `lib/plan-card.ts:rowToMealCard` is the one place `is_optimised` / `original_macros` / `quantity_g` /
 `catalog_uuid` are computed from a raw `tbl_week_plan_entries` row; it's shared by the `today` and
 `week` routes specifically so they can't drift apart on that mapping (its own header comment says so).
+`original_macros` (the "original" toggle) is the entry's `original_snapshot` at its amount before the first
+change: `originalQtyG` (`adjusted_snapshot.original_qty_g`) for a food sized in grams, and `originalMultiplier`
+(`adjusted_snapshot.original_multiplier`, since 2026-10-21, `docs/FRONTEND_ORIGINAL_SERVINGS.md`) for a recipe
+or a recipe-kind side, snack or breakfast item. A row changed before that has no stamp and falls back to
+`serving_multiplier`, so its original equals its current. The app never changes an entry's servings itself
+(serving changes go through the agents), so it never writes the stamp.
 
 **Recipe save** (`responseType === "recipe"` messages only, `PlanTab.tsx:800-930`): a heart button
 opens a collections checklist (`collections` come from the page's initial props, filtered to drop
@@ -252,6 +299,8 @@ the exception: each patches only the one block its button lived in. See
 - Two more, called straight from the browser with the user's JWT (`lib/edge-call.ts`, allowlist in
   `lib/ui-body.ts`): `sides-catalog`, `snacks-catalog` and `breakfasts-catalog`, by `ui_body` buttons and by a plan card's
   stop-suggesting button
+- Supabase RPC `get_recipe_json_by_uuid` (read, from the browser with the user's login): View recipe on a
+  recipe the user does not have, by the snapshot's `recipe_uuid` (§5.11)
 
 ## Writes
 
@@ -261,5 +310,6 @@ the exception: each patches only the one block its button lived in. See
   proxy to — not visible from this repo
 - `POST /api/recipe/submit`, `POST /api/recipe/collections`
 - Supabase RPC `link_user_recipe` — called directly from the client, not via an API route
+- Supabase RPC `set_recipe_planning` (a recipe card's Stop / Use in auto planning button, as on the recipe page) — called directly from the client; it changes whether the recipe is picked by automatic planning, not the planned entry. The card also reads `viw_user_collection_set` (`auto_plan`, `auto_reason`) for that one recipe
 - `snacks-catalog` `set_auto` / `breakfasts-catalog` `set_auto` / `sides-catalog` `remove` (and their Undos) — a plan card's stop-suggesting
   button, also called directly from the client; they change the user's catalog, not the planned entry
