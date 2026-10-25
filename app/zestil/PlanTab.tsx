@@ -462,7 +462,7 @@ const WELCOME_MESSAGE: AgentMessage = {
   content:      "Hi! I'm your meal planner. Ask me to show your week, add a recipe, a snack or a side to your plan. You can start by saying \"plan my day\"",
 };
 
-const DEFAULT_QUICK_REPLIES = ["List my snacks", "List my sides", "What options do I have for Breakfast?", "Plan today for me"];
+const DEFAULT_QUICK_REPLIES = ["Plan today for me", "List my snacks", "List my sides", "What options do I have for Breakfast?"];
 
 export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCollectionCreated }: { collections?: { id: number; name: string }[]; onRecipeSaved?: () => void; onCollectionCreated?: (c: { id: number; name: string }) => void }) {
   const supabase = createClient();
