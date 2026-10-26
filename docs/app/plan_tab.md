@@ -247,6 +247,12 @@ reads `Breakfast ⋅ 50g`. A recipe item is a plain `recipe` entry. A breakfast 
 stop-suggesting button (above); a recipe item, being a recipe entry, does not. The My breakfasts list itself, like My snacks, is the agent's `ui_body`
 (`breakfasts-catalog`); the app has no screen of its own for it.
 
+**Add recipe** (`components/AddRecipeButton.tsx`, the Saved tab's own "+" and dialog): a 35px green button
+floating at the bottom right of the chat (`absolute right-4 bottom-3` in a wrapper around the scroll area),
+just above the quick-reply chips without covering them. The chat has `pb-16` so its last message can scroll
+clear of it. It opens the same paste-a-link-or-text dialog, with the collections picker, and calls
+`onRecipeSaved` like the Saved tab does.
+
 `IngredientCard` (an `ingredients_list` suggestion, not a planned item) keeps the original behaviour: a
 bar that slides in Add / More / Info. Only Add does anything; Info has no handler, and More's two items
 have nothing to open for a bare ingredient name, so they now just close the menu.

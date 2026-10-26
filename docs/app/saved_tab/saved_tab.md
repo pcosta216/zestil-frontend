@@ -103,12 +103,14 @@ box reads 0. A new visit (a reload) starts fresh.
 `scrollTop`/`scrollHeight`/`clientHeight` on every scroll/resize and whenever `displayed` changes;
 hidden entirely when content already fits without scrolling.
 
-**Floating add button** (`SavedTab.tsx:238-246`): a green circular button, bottom-right, on both
-sub-tabs — `bottom-20` on `"mine"` to clear the search bar, `bottom-4` on `"recent"` since that tab
-has none. Opens the Add-recipe overlay; `z-10`, one layer below the collections panel (`z-20`) so
-the panel visually covers it while open.
+**Floating add button** (`components/AddRecipeButton.tsx`, shared with the Plan tab since 2026-10-26):
+a 35px green circular button, bottom-right, on both sub-tabs — `bottom-20` on `"mine"` to clear the search
+bar, `bottom-4` on `"recent"` since that tab has none. The component holds the button, the Add-recipe
+overlay, the collections picker and the status banner described below; each tab only positions the button
+(`className`). Opens the Add-recipe overlay; `z-10`, one layer below the collections panel (`z-20`) so the
+panel visually covers it while open.
 
-**Add-recipe overlay** (`addOpen`, `SavedTab.tsx:251-287`): a full-height card (24px inset on all
+**Add-recipe overlay** (`addOpen`, in `AddRecipeButton.tsx`): a full-height card (24px inset on all
 four sides, matching the button's own right/bottom gutter) with a `textarea` and Cancel/Add. Stays
 open — Add disabled, labelled "Adding…" — until the submit resolves, rather than closing
 optimistically; mirrors how Explore's own save button doesn't dismiss its card until its fetch

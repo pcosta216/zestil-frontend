@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { announceDietSearch, announceItemSaved } from "@/lib/diet";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
+import { AddRecipeButton } from "@/components/AddRecipeButton";
 import { hasBodyText, parseUiBody, type UiBody } from "@/lib/ui-body";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
@@ -852,7 +853,10 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
 
   return (
     <>
-      <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 py-5 flex flex-col gap-3.5">
+      {/* The chat, with the add-recipe button floating at its bottom right, just above the quick replies. The
+          chat's bottom padding keeps the last message clear of the button when scrolled to the end. */}
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 pt-5 pb-16 flex flex-col gap-3.5">
         {messages.map((msg) =>
           msg.type === "dayview" ? (
             <div key={msg.id} className="flex flex-col gap-2">
@@ -1054,6 +1058,13 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
         )}
 
         {isTyping && <TypingIndicator />}
+      </div>
+      <AddRecipeButton
+        className="absolute right-4 bottom-3 z-10"
+        collections={rawCollections}
+        onRecipeSaved={onRecipeSaved}
+        onCollectionCreated={onCollectionCreated}
+      />
       </div>
 
       <div className="flex gap-2 overflow-x-auto no-scrollbar px-5 py-2 flex-shrink-0">

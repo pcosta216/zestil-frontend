@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { memo, useState } from "react";
 import { ImageOff, CircleEllipsis } from "@/lib/icons";
 import type { RecipeCollection } from "@/lib/supabase/queries";
 import { isValidUrl, formatTime } from "@/lib/recipe-format";
@@ -12,7 +12,9 @@ interface Props {
   recipe: RecipeCollection;
 }
 
-export function RecipeCard({ recipe }: Props) {
+// Memoised: the Saved tab re-renders on every scroll (its scroll thumb) and sub-tab switch, and a card whose
+// recipe row is unchanged has nothing to redraw.
+export const RecipeCard = memo(function RecipeCard({ recipe }: Props) {
   const initial = recipe.image_url && isValidUrl(recipe.image_url) ? recipe.image_url : null;
 
   const [imageSrc, setImageSrc] = useState<string | null>(initial);
@@ -90,4 +92,4 @@ export function RecipeCard({ recipe }: Props) {
       </Link>
     </motion.div>
   );
-}
+});
