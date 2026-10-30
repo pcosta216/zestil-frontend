@@ -34,7 +34,13 @@ export type UiFormOption = { caption: string; value: string };
 export type UiFormField =
   | { kind: "number"; id: string; caption: string; required: boolean; hint?: string; unit?: string; min?: number; max?: number; value?: number }
   | { kind: "choice"; id: string; caption: string; required: boolean; hint?: string; options: UiFormOption[]; value?: string }
-  | { kind: "checks"; id: string; caption: string; required: boolean; hint?: string; options: UiFormOption[]; value?: string[] };
+  // Never required (§3.1.8).
+  | { kind: "checks"; id: string; caption: string; required: false; hint?: string; options: UiFormOption[]; value?: string[] }
+  // One line of text (the label form's name, D88). `maxLength` is the contract's `max_length`.
+  | { kind: "text"; id: string; caption: string; required: boolean; hint?: string; maxLength?: number; value?: string }
+  // A kind this renderer doesn't know, or a choice or checks with no usable options: its caption is shown
+  // as a disabled line (§3.1.8), and it is never answered, so it takes no part in Save.
+  | { kind: "unsupported"; id: string; caption: string; required: boolean; hint?: string };
 export type UiFormButton = { caption: string; icon?: string | null; action?: UiAction };
 export type UiFormBlock = {
   type: "form";
@@ -178,27 +184,38 @@ function parseOptions(raw: unknown): UiFormOption[] {
   });
 }
 
-// A field of an unknown kind, or one without an id or caption, is skipped, as an unknown block is (§3).
+// A field without an id or caption is skipped. One of an unknown kind is kept as "unsupported": §3.1.8
+// says to show its caption as a disabled line, so the user sees that something else was asked.
 function parseFormField(raw: unknown): UiFormField | undefined {
   if (!isObj(raw) || !isStr(raw.id) || !raw.id || !isStr(raw.caption)) return undefined;
   const base = { id: raw.id, caption: raw.caption, required: raw.required === true, hint: isStr(raw.hint) && raw.hint ? raw.hint : undefined };
+  const unsupported: UiFormField = { kind: "unsupported", ...base };
   switch (raw.kind) {
     case "number":
       return { kind: "number", ...base, unit: isStr(raw.unit) && raw.unit ? raw.unit : undefined, min: num(raw.min), max: num(raw.max), value: num(raw.value) };
     case "choice": {
       const options = parseOptions(raw.options);
-      if (!options.length) return undefined;
+      if (!options.length) return unsupported;
       const value = raw.value === undefined || raw.value === null ? undefined : String(raw.value);
       return { kind: "choice", ...base, options, value: options.some((o) => o.value === value) ? value : undefined };
     }
+    case "text": {
+      const max = num(raw.max_length);
+      return {
+        kind: "text",
+        ...base,
+        maxLength: max !== undefined && max >= 1 ? Math.floor(max) : undefined,
+        value: isStr(raw.value) ? raw.value : typeof raw.value === "number" && Number.isFinite(raw.value) ? String(raw.value) : undefined,
+      };
+    }
     case "checks": {
       const options = parseOptions(raw.options);
-      if (!options.length) return undefined;
+      if (!options.length) return { ...unsupported, required: false };
       const sent = Array.isArray(raw.value) ? raw.value.map((v: unknown) => String(v)) : [];
-      return { kind: "checks", ...base, options, value: options.filter((o) => sent.includes(o.value)).map((o) => o.value) };
+      return { kind: "checks", ...base, required: false, options, value: options.filter((o) => sent.includes(o.value)).map((o) => o.value) };
     }
     default:
-      return undefined;
+      return unsupported;
   }
 }
 

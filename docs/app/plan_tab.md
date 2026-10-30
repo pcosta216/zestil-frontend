@@ -62,13 +62,18 @@ reply names the day in `changed_dates` without carrying its cards.
 | `ingredients_list` | `IngredientCard` rows with an Add action |
 | `recipe` | markdown + a hero image if `metadata.media.image_url` is set |
 | `feedback` | generic markdown bubble, content is the `ui_body` (below). `meal_cards` / `changed_dates` are **ignored** on this type, so the reply neither renders a plan grid nor triggers the day-view re-fetch — the chat just continues |
-| `info` (also a missing `response_type`) | generic markdown bubble. `meal_cards` / `changed_dates` are **ignored**, same as `feedback`: any cards would otherwise hide the bubble (below) and the sentence with it |
+| `info` (also a missing `response_type`) | generic markdown bubble. `meal_cards` / `changed_dates` are **ignored**, same as `feedback`: any cards would otherwise hide the bubble (below) and the sentence with it. A question back to the user is always `info`, and the label form comes on one: its `ui_body` renders under the reply's text, like any type's (below) |
 | anything else | generic markdown bubble |
 
 For every type except `feedback` and `info`, a reply that has `meal_cards` shows the grid **instead
 of** its bubble — the `!(msg.mealCards?.length)` guard in the render (since 2026-05-08, `ce84e7d`),
 so the text is never shown. That is by design for `week_plan` / `day_update`, whose text is the plan
 spelled out; it would also hide a `suggestion_pending` reply's Confirm / Keep buttons.
+
+**Scrolling.** New content scrolls the chat to its end, except a reply whose `ui_body` has a `form` at its top
+level: the label form
+is taller than the chat on a phone, so its end would hide the question (or a correction's reason) above it.
+That reply opens at its top instead, or at its end when it fits (`UiBodyBubble` carries `data-msg-id`).
 
 **`ui_body`** (any response type; contract in `docs/UI_BODY_CONTRACT.md`): parsed by
 `lib/ui-body.ts:parseUiBody` (unknown block types dropped, unknown `text` styles kept as body) and
@@ -101,6 +106,28 @@ Blocks:
   about 430px wide, shrinking in a narrower bubble). A `nutrition` block that a group in the same list
   toggles is drawn **inside that group's card**, under a divider below the buttons, and only while
   the group is open; one nothing toggles keeps a card of its own.
+- `form` (contract §3.1.8, `docs/FRONTEND_LABEL_FORM.md`; the label form a food is entered from): its own
+  component, `components/FormBlock.tsx`, with the logic in `lib/ui-form.ts`. A caption, the optional detail
+  line, the fields in order, then Save and the `cancel` button ("Never mind") side by side. `text` (the label
+  form's first field, the food's name, prefilled with what Zestil asked about and the user's to change, D88)
+  is a full-width one-line box with `max_length` as the input's limit; it is sent trimmed, blanks count as
+  empty, and a prefill longer than `max_length` shows "At most N characters" until it is shortened. `number` is a text
+  box with `inputMode="decimal"` and its `unit` after it (the unit is also in the box's accessible name,
+  spelled out: "Sodium (milligrams)"), `hint` as helper text, `value` prefilled; `choice` and `checks` are
+  chips with the real radio or checkbox laid invisibly over each chip; a ticked chip shows a check mark (so
+  its state isn't told by colour alone, and it survives Windows High Contrast, where focus becomes an
+  outline). An unknown field kind shows its
+  caption as a disabled line and takes no part in Save. Save is enabled once every `required` field is
+  filled, every number is a number within its `min`/`max`, and, when the form has both, `sodium_mg` or
+  `salt_g` is filled (`ONE_OF`; the brief asks for one of the two); "Still needed: …" says what is left, and
+  an invalid number says why under its box. Numbers: spaces ignored, one decimal comma reads as a point
+  ("0,02" → 0.02), and digits grouped in threes ("1,330", "1.000") are refused with both readings ("Write
+  1330 or 1.33") rather than guessed, since a US label groups thousands with a comma; a suggested spelling is
+  always one the form accepts ("1.125" → "Write 1125, or 1.1250 for 1.125"; "1,330.5" → "Write 1330.5"). A
+  number the agent prefilled (a correction) counts as sent while the box still shows it, so a prefilled 1.125
+  is never refused. Enter never sends
+  the form (Save is a plain button): in a number box it moves to the next box, on the last it closes the
+  keyboard (text boxes included), on a chip it ticks the chip, once per press. The form's buttons are `message` actions (below).
 - `notice`: a note or warning behind its icon. Collapsed (the default) it is **only the icon** — bare
   and tone-coloured, not a chip; the padding around the glyph is the tap target, and a negative
   margin keeps the glyph in line with the text above. It is named for screen readers by its `title`
@@ -124,6 +151,16 @@ Actions:
 - `call`: from the browser straight to `<NEXT_PUBLIC_SUPABASE_URL>/functions/v1/<endpoint>` with the
   user's JWT (allowlist in `UI_ACTION_ENDPOINTS`: `sides-catalog`, `snacks-catalog`, `breakfasts-catalog`).
 - `toggle`: local state, shows or hides a `nutrition` block.
+- `message` (§4.8), from a `form` only (a button with one still renders disabled, §4.8 "Where it can go"):
+  the user's next chat turn through the usual `sendMessage`, with the transcript bubble. Save sends
+  `action.text + ": " +` every filled field as `caption: value unit`, joined by `"; "` (a choice's option
+  caption, checks' captions joined by `", "`), plus the request's `form`: the action's `payload` with
+  `values` keyed by field id (a text as its trimmed string, numbers as numbers, a choice as its option value,
+  checks as an array of values, empty optional fields left out). The label form's `payload.name` is the food
+  Zestil asked about; `values.name` is the name the user left, the one it is saved under. The second button sends its text alone, with no `form`. While
+  another turn is in flight both are disabled; once sent, the form's fieldset is disabled and the answers
+  stay visible (single-shot). `sendMessage` resolves false when it failed (non-2xx, network), and the form
+  opens again with "Couldn't send that. Please try again."; a 2xx reply, whatever it says, leaves it sent.
 - `replace`: local, swaps its scope for the given blocks; `[]` removes the scope (the snack list's
   Continue). No pending state. What it swaps out is **kept** for `revert`: on the slot it creates (or
   on the body, for a body-level scope), written by the same state update as the swap, one level, only

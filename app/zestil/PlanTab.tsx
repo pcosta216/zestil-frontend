@@ -296,7 +296,7 @@ function UiBodyBubble({ msg, uiBody, onChange, onMessage, messageBusy }: {
 }) {
   const showLead = !hasBodyText(uiBody.blocks) && !msg.mealCards?.length;
   return (
-    <div className="flex gap-2.5 items-start max-w-[95%]">
+    <div data-msg-id={msg.id} className="flex gap-2.5 items-start max-w-[95%]">
       <AgentIcon />
       <div className="flex flex-col gap-1.5 min-w-0 w-full">
         <div className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main flex flex-col gap-2.5" style={{ borderRadius: "4px 16px 16px 16px" }}>
@@ -596,9 +596,23 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
       .catch((e) => console.error("[goals] error:", e));
   }, []);
 
+  // New content scrolls the chat to its end, except a reply that carries a form: a form is taller than the
+  // chat on a phone, so its end would hide the question and the reason above it (a correction says what was
+  // wrong there). Such a reply opens at its top instead, or at the end when it fits.
   useEffect(() => {
     if (skipNextScroll.current) { skipNextScroll.current = false; return; }
-    if (chatRef.current) chatRef.current.scrollTop = chatRef.current.scrollHeight;
+    const chat = chatRef.current;
+    if (!chat) return;
+    const last = messages[messages.length - 1];
+    if (!isTyping && last?.type === "agent" && last.uiBody?.blocks.some((b) => b.type === "form")) {
+      const el = chat.querySelector<HTMLElement>(`[data-msg-id="${CSS.escape(last.id)}"]`);
+      if (el) {
+        const top = el.getBoundingClientRect().top - chat.getBoundingClientRect().top + chat.scrollTop - 12;
+        chat.scrollTop = Math.max(0, Math.min(chat.scrollHeight - chat.clientHeight, top));
+        return;
+      }
+    }
+    chat.scrollTop = chat.scrollHeight;
   }, [messages, isTyping]);
 
   // Reads one day. Returns the cards rather than committing them, so callers can decide whether to
