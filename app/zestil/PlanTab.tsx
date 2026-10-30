@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { announceDietSearch, announceItemSaved } from "@/lib/diet";
 import { CreateCollectionButton } from "@/components/CreateCollectionButton";
 import { UiBodyBlocks } from "@/components/UiBodyBlocks";
+import type { SendMessage } from "@/components/FormBlock";
 import { AddRecipeButton } from "@/components/AddRecipeButton";
 import { hasBodyText, parseUiBody, type UiBody } from "@/lib/ui-body";
 
@@ -284,7 +285,15 @@ function AgentBubble({ msg, onSend }: { msg: AgentMessage; onSend: (text: string
 // sentence, so a message with cards gets a bubble of just the blocks below them. A response type
 // with its own bubble layout (recipe, suggestion_pending…) that starts carrying ui_body needs a
 // deliberate decision here (contract §2).
-function UiBodyBubble({ msg, uiBody, onChange }: { msg: AgentMessage; uiBody: UiBody; onChange: (update: (prev: UiBody) => UiBody) => void }) {
+//
+// A form in the blocks sends its answers as the user's next chat turn (`onMessage`, contract §4.8).
+function UiBodyBubble({ msg, uiBody, onChange, onMessage, messageBusy }: {
+  msg: AgentMessage;
+  uiBody: UiBody;
+  onChange: (update: (prev: UiBody) => UiBody) => void;
+  onMessage: SendMessage;
+  messageBusy: boolean;
+}) {
   const showLead = !hasBodyText(uiBody.blocks) && !msg.mealCards?.length;
   return (
     <div className="flex gap-2.5 items-start max-w-[95%]">
@@ -292,7 +301,7 @@ function UiBodyBubble({ msg, uiBody, onChange }: { msg: AgentMessage; uiBody: Ui
       <div className="flex flex-col gap-1.5 min-w-0 w-full">
         <div className="bg-white border border-[rgba(0,0,0,0.08)] px-4 py-3 text-[13.5px] leading-relaxed text-text-main flex flex-col gap-2.5" style={{ borderRadius: "4px 16px 16px 16px" }}>
           {showLead && <div className="chat-markdown"><Markdown remarkPlugins={[remarkBreaks]}>{msg.content}</Markdown></div>}
-          <UiBodyBlocks uiBody={uiBody} onChange={onChange} />
+          <UiBodyBlocks uiBody={uiBody} onChange={onChange} onMessage={onMessage} messageBusy={messageBusy} />
         </div>
       </div>
     </div>
@@ -653,8 +662,11 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
     }]);
   }, [syncDots]);
 
-  const sendMessage = useCallback(async (text: string) => {
-    if (!text.trim() || isTyping) return;
+  // `form` is a form block's answers (contract §4.8, docs/FRONTEND_LABEL_FORM.md): sent with the text, which
+  // is what the transcript shows; the agent reads the numbers from `form`. Resolves true once a reply has
+  // arrived, false when nothing was sent (another turn in flight) or it failed, so a form can open again.
+  const sendMessage = useCallback(async (text: string, form?: Record<string, unknown>): Promise<boolean> => {
+    if (!text.trim() || isTyping) return false;
 
     const userMsg: Message = { id: Date.now().toString(), type: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
@@ -686,6 +698,7 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
           explore_history: exploreSnapshot,
           active_date:     activeDate.current,
           week_start_day:  weekStartDay.current,
+          ...(form ? { form } : {}),
         }),
       });
 
@@ -760,10 +773,12 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
         apiHistory.current.pop(); // remove failed user message — don't poison history
       }
       if (quick_replies?.length) setQuickReplies(quick_replies);
+      return true;
     } catch (err) {
       apiHistory.current.pop(); // remove the user message that got no real response
       const msg = err instanceof Error ? err.message : "Something went wrong.";
       setMessages((prev) => [...prev, { id: `err-${Date.now()}`, type: "agent", responseType: "info", content: `Error: ${msg}` }]);
+      return false;
     } finally {
       setIsTyping(false);
     }
@@ -1044,6 +1059,8 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
                 <UiBodyBubble
                   msg={msg}
                   uiBody={msg.uiBody}
+                  onMessage={sendMessage}
+                  messageBusy={isTyping}
                   onChange={(update) => {
                     // In-place patch of one block, like a delete: don't yank the chat to the bottom.
                     // An updater, not a value: two groups can resolve close together, and each must

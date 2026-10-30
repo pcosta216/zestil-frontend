@@ -7,9 +7,13 @@ export type UiReplaceAction = { kind: "replace"; blocks: UiBlock[] };
 // Puts back what the scope held before the last local `replace`, on the device only (§4.7). Disabled
 // when nothing was kept.
 export type UiRevertAction = { kind: "revert" };
-// `message` is reserved in v1 and an unknown kind lands here too: both render disabled.
+// Sends the user's next chat turn through the router, as if typed (§4.8): `text` is what the transcript
+// shows. A form's submit also sends its `payload`, with the fields' values added, as the request's `form`.
+// Used by forms only for now: anywhere else it renders disabled, as an unknown kind does.
+export type UiMessageAction = { kind: "message"; text: string; payload?: Record<string, unknown> };
+// An unknown kind lands here: it renders disabled.
 export type UiOtherAction = { kind: "other" };
-export type UiAction = UiCallAction | UiToggleAction | UiReplaceAction | UiRevertAction | UiOtherAction;
+export type UiAction = UiCallAction | UiToggleAction | UiReplaceAction | UiRevertAction | UiMessageAction | UiOtherAction;
 
 export type UiButton = {
   id: string;
@@ -23,6 +27,25 @@ export type UiButton = {
 };
 
 export type UiChoiceOption = { caption: string; detail?: string; value: string };
+
+// The fields of a `form` (§3.1.8), in the order they are shown. `value` is a prefilled answer: an agent
+// sends it on a correction, for the fields that were filled. Values are compared as strings.
+export type UiFormOption = { caption: string; value: string };
+export type UiFormField =
+  | { kind: "number"; id: string; caption: string; required: boolean; hint?: string; unit?: string; min?: number; max?: number; value?: number }
+  | { kind: "choice"; id: string; caption: string; required: boolean; hint?: string; options: UiFormOption[]; value?: string }
+  | { kind: "checks"; id: string; caption: string; required: boolean; hint?: string; options: UiFormOption[]; value?: string[] };
+export type UiFormButton = { caption: string; icon?: string | null; action?: UiAction };
+export type UiFormBlock = {
+  type: "form";
+  id: string;
+  caption: string;
+  detail?: string;
+  fields: UiFormField[];
+  submit: UiFormButton;
+  // A second button beside Save ("Never mind").
+  cancel?: UiFormButton;
+};
 
 export const MACRO_KEYS = ["kcal", "protein", "carbs", "fat", "sugar", "sodium"] as const;
 export type UiMacros = Partial<Record<(typeof MACRO_KEYS)[number], number>>;
@@ -48,6 +71,7 @@ export type UiBlock =
   // A collapsible header that contains its blocks. One level only: a section never holds a section (§3.1.6).
   | { type: "section"; id: string; caption: string; detail?: string; collapsed?: boolean; blocks: UiBlock[] }
   | UiNotice
+  | UiFormBlock
   | UiSlotBlock;
 
 // A note or warning behind its icon (§3.1.7): collapsed, the icon is all there is. It has no `id`.
@@ -92,6 +116,9 @@ function parseAction(raw: unknown): UiAction | undefined {
   // A replace without a block list is malformed, not "remove everything": it renders disabled.
   if (raw.kind === "replace" && Array.isArray(raw.blocks)) return { kind: "replace", blocks: parseBlocks(raw.blocks) };
   if (raw.kind === "revert") return { kind: "revert" };
+  if (raw.kind === "message" && isStr(raw.text) && raw.text.trim()) {
+    return { kind: "message", text: raw.text, ...(isObj(raw.payload) ? { payload: raw.payload } : {}) };
+  }
   return { kind: "other" };
 }
 
@@ -127,6 +154,57 @@ function parseNotice(raw: Record<string, any>): UiNotice | undefined {
     format: raw.format === "markdown" ? "markdown" : "plain",
     collapsed: raw.collapsed !== false, // unlike every other block, collapsed is the default
   };
+}
+
+// A number, or a string that is one ("16.7"); anything else is no number.
+function num(v: unknown): number | undefined {
+  if (typeof v === "number") return Number.isFinite(v) ? v : undefined;
+  if (isStr(v) && v.trim() !== "") {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : undefined;
+  }
+  return undefined;
+}
+
+function parseOptions(raw: unknown): UiFormOption[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  return raw.flatMap((o: unknown): UiFormOption[] => {
+    if (!isObj(o) || !isStr(o.caption) || (!isStr(o.value) && typeof o.value !== "number")) return [];
+    const value = String(o.value);
+    if (seen.has(value)) return []; // two options with one value can't be told apart
+    seen.add(value);
+    return [{ caption: o.caption, value }];
+  });
+}
+
+// A field of an unknown kind, or one without an id or caption, is skipped, as an unknown block is (§3).
+function parseFormField(raw: unknown): UiFormField | undefined {
+  if (!isObj(raw) || !isStr(raw.id) || !raw.id || !isStr(raw.caption)) return undefined;
+  const base = { id: raw.id, caption: raw.caption, required: raw.required === true, hint: isStr(raw.hint) && raw.hint ? raw.hint : undefined };
+  switch (raw.kind) {
+    case "number":
+      return { kind: "number", ...base, unit: isStr(raw.unit) && raw.unit ? raw.unit : undefined, min: num(raw.min), max: num(raw.max), value: num(raw.value) };
+    case "choice": {
+      const options = parseOptions(raw.options);
+      if (!options.length) return undefined;
+      const value = raw.value === undefined || raw.value === null ? undefined : String(raw.value);
+      return { kind: "choice", ...base, options, value: options.some((o) => o.value === value) ? value : undefined };
+    }
+    case "checks": {
+      const options = parseOptions(raw.options);
+      if (!options.length) return undefined;
+      const sent = Array.isArray(raw.value) ? raw.value.map((v: unknown) => String(v)) : [];
+      return { kind: "checks", ...base, options, value: options.filter((o) => sent.includes(o.value)).map((o) => o.value) };
+    }
+    default:
+      return undefined;
+  }
+}
+
+function parseFormButton(raw: unknown): UiFormButton | undefined {
+  if (!isObj(raw) || !isStr(raw.caption)) return undefined;
+  return { caption: raw.caption, icon: isStr(raw.icon) ? raw.icon : null, action: parseAction(raw.action) };
 }
 
 function parseBlock(raw: unknown): UiBlock | undefined {
@@ -194,6 +272,25 @@ function parseBlock(raw: unknown): UiBlock | undefined {
         collapsed: raw.collapsed === true,
         // One level only (§3.1.6): a section inside a section is skipped like any unknown block.
         blocks: parseBlocks(raw.blocks).filter((b) => b.type !== "section"),
+      };
+    }
+    case "form": {
+      if (!isStr(raw.id) || !Array.isArray(raw.fields)) return undefined;
+      const submit = parseFormButton(raw.submit);
+      if (!submit) return undefined;
+      const seen = new Set<string>();
+      const fields = raw.fields
+        .map(parseFormField)
+        .filter((f: UiFormField | undefined): f is UiFormField => !!f && !seen.has(f.id) && !!seen.add(f.id));
+      if (!fields.length) return undefined;
+      return {
+        type: "form",
+        id: raw.id,
+        caption: raw.caption,
+        detail: isStr(raw.detail) && raw.detail ? raw.detail : undefined,
+        fields,
+        submit,
+        cancel: parseFormButton(raw.cancel),
       };
     }
     default:

@@ -1,21 +1,16 @@
 "use client";
 
-import { useId, useState, type ComponentType, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { callEdge } from "@/lib/edge-call";
 import { MacroRings } from "@/components/MacroRings";
 import { MiniMarkdown } from "@/components/MiniMarkdown";
-import { CARD, CELL, GROUP_COLS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, SwitchTrack, TONES } from "@/components/ui-style";
-import { ArrowLeftRight, Ban, Check, ChevronDown, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
+import { CARD, CELL, GROUP_COLS, ICONS, PILL, PILL_PRIMARY, PILL_SECONDARY, Spinner, SwitchTrack, TONES } from "@/components/ui-style";
+import { FormBlock, type SendMessage } from "@/components/FormBlock";
+import { ChevronDown } from "@/lib/icons";
 import {
   ROOT_SCOPE, applyBlocks, applyReplace, findNutrition, groupScope, isAllowedCall, previousOf,
   type UiBlock, type UiBody, type UiButton, type UiCallAction, type UiTone,
 } from "@/lib/ui-body";
-
-// The closed icon set (contract §3.2). An unknown name renders no icon.
-const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
-  trash: Trash2, edit: Pencil, toggle: ToggleRight, undo: Undo2, info: Info,
-  check: Check, cross: X, alert: TriangleAlert, plus: Plus, swap: ArrowLeftRight, block: Ban,
-};
 
 // A notice is drawn in its tone's colour, icon included, whatever the icon is (§3.1.7): the icon is
 // the tone's colour, and the open panel is tinted with it. `info` and `forbidden` are "open" there (no
@@ -133,11 +128,16 @@ function ChoiceBlock({ block, disabled, pressed, onSubmit, onCancel }: {
 // right-aligned, when the body has no such button. `buttonTone` recolours every button in the body (the plan
 // card's reply is just an Undo, which the contract's table draws green and the card draws orange). It does
 // not go by icon name: the reply's Undo may arrive with another icon, or none.
-export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
+//
+// `onMessage` sends a chat turn for a `message` action (§4.8), a form's buttons; `messageBusy` says one is
+// already in flight. Without `onMessage` (a plan card's reply) a form shows with its buttons disabled.
+export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone, onMessage, messageBusy = false }: {
   uiBody: UiBody;
   onChange: (update: (prev: UiBody) => UiBody) => void;
   dismiss?: { caption: string; onClick: () => void };
   buttonTone?: string;
+  onMessage?: SendMessage;
+  messageBusy?: boolean;
 }) {
   const [pending,  setPending]  = useState<Record<string, string>>({});  // scope → the control that was pressed
   const [errors,   setErrors]   = useState<Record<string, string>>({});  // scope → inline error
@@ -369,6 +369,10 @@ export function UiBodyBlocks({ uiBody, onChange, dismiss, buttonTone }: {
             onCancel={onCancel}
           />
         );
+      }
+
+      if (block.type === "form") {
+        return <FormBlock key={k} block={block} onMessage={onMessage} busy={messageBusy} />;
       }
 
       if (block.type === "button_group") {

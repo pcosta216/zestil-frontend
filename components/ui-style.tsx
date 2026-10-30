@@ -1,3 +1,6 @@
+import type { ComponentType } from "react";
+import { ArrowLeftRight, Ban, Check, Info, Pencil, Plus, ToggleRight, Trash2, TriangleAlert, Undo2, X } from "@/lib/icons";
+
 // The look of the app's action buttons, shared so the snack and side rows (UiBodyBlocks) and the plan
 // cards (WeekdayRecipeCard) draw the same buttons from one place and cannot drift apart.
 
@@ -24,6 +27,12 @@ export const YELLOW = "bg-[#f9cb16] border-[#f9cb16] text-text-main enabled:hove
 // or not.
 export const TONES: Record<string, string> = { trash: RED, edit: GREY, info: BLUE, alert: YELLOW };
 export const CARD = "bg-[#faf9f6] border border-[rgba(0,0,0,0.07)] rounded-lg";
+
+// The closed icon set (contract §3.2), by the name an agent sends. An unknown name renders no icon.
+export const ICONS: Record<string, ComponentType<{ size?: number; className?: string }>> = {
+  trash: Trash2, edit: Pencil, toggle: ToggleRight, undo: Undo2, info: Info,
+  check: Check, cross: X, alert: TriangleAlert, plus: Plus, swap: ArrowLeftRight, block: Ban,
+};
 
 // A switch's track and knob: the snack list's Auto switch (UiBodyBlocks) and the recipe page's
 // planning switch (PlanningSwitch) draw the same one.
