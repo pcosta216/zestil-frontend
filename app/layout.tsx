@@ -34,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fraunces.variable} ${dmSans.variable} h-full`}
+      className={`${fraunces.variable} ${dmSans.variable} h-full overscroll-none`}
     >
       <body className="h-full bg-warm antialiased">{children}</body>
     </html>

@@ -96,7 +96,9 @@ export function AppShell({ user, initialRecipes, initialCollections, profile, bi
   useEffect(() => onPlanningChanged(() => setRecipes((prev) => withLatestAutoPlan(prev))), []);
 
   return (
-    <div className="flex flex-col h-dvh max-w-2xl mx-auto bg-warm">
+    // Pinned to the viewport, so the document has nothing to scroll and the nav bar stays at the bottom;
+    // each tab scrolls inside.
+    <div className="fixed inset-0 flex flex-col max-w-2xl mx-auto bg-warm">
       <InstallBanner />
       <DietHost userId={user.id} onRecipesChanged={refreshRecipes} />
       {pickingRecipes && (

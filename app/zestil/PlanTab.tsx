@@ -883,9 +883,11 @@ export function PlanTab({ collections: rawCollections = [], onRecipeSaved, onCol
   return (
     <>
       {/* The chat, with the add-recipe button floating at its bottom right, just above the quick replies. The
-          chat's bottom padding keeps the last message clear of the button when scrolled to the end. */}
+          chat's bottom padding keeps the last message clear of the button when scrolled to the end.
+          `break-words` (inherited) wraps a word too long for its bubble, such as a long product name in a
+          message, a reply or a form's caption, instead of pushing it past the bubble on a narrow phone. */}
       <div className="relative flex-1 min-h-0 flex flex-col">
-      <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar px-5 pt-5 pb-16 flex flex-col gap-3.5">
+      <div ref={chatRef} className="flex-1 overflow-y-auto no-scrollbar break-words px-5 pt-5 pb-16 flex flex-col gap-3.5">
         {messages.map((msg) =>
           msg.type === "dayview" ? (
             <div key={msg.id} className="flex flex-col gap-2">

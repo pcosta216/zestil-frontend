@@ -108,26 +108,30 @@ Blocks:
   the group is open; one nothing toggles keeps a card of its own.
 - `form` (contract §3.1.8, `docs/FRONTEND_LABEL_FORM.md`; the label form a food is entered from): its own
   component, `components/FormBlock.tsx`, with the logic in `lib/ui-form.ts`. A caption, the optional detail
-  line, the fields in order, then Save and the `cancel` button ("Never mind") side by side. `text` (the label
-  form's first field, the food's name, prefilled with what Zestil asked about and the user's to change, D88)
-  is a full-width one-line box with `max_length` as the input's limit; it is sent trimmed, blanks count as
-  empty, and a prefill longer than `max_length` shows "At most N characters" until it is shortened. `number` is a text
-  box with `inputMode="decimal"` and its `unit` after it (the unit is also in the box's accessible name,
-  spelled out: "Sodium (milligrams)"), `hint` as helper text, `value` prefilled; `choice` and `checks` are
-  chips with the real radio or checkbox laid invisibly over each chip; a ticked chip shows a check mark (so
-  its state isn't told by colour alone, and it survives Windows High Contrast, where focus becomes an
-  outline). An unknown field kind shows its
-  caption as a disabled line and takes no part in Save. Save is enabled once every `required` field is
-  filled, every number is a number within its `min`/`max`, and, when the form has both, `sodium_mg` or
-  `salt_g` is filled (`ONE_OF`; the brief asks for one of the two); "Still needed: …" says what is left, and
-  an invalid number says why under its box. Numbers: spaces ignored, one decimal comma reads as a point
-  ("0,02" → 0.02), and digits grouped in threes ("1,330", "1.000") are refused with both readings ("Write
-  1330 or 1.33") rather than guessed, since a US label groups thousands with a comma; a suggested spelling is
-  always one the form accepts ("1.125" → "Write 1125, or 1.1250 for 1.125"; "1,330.5" → "Write 1330.5"). A
-  number the agent prefilled (a correction) counts as sent while the box still shows it, so a prefilled 1.125
-  is never refused. Enter never sends
-  the form (Save is a plain button): in a number box it moves to the next box, on the last it closes the
-  keyboard (text boxes included), on a chip it ticks the chip, once per press. The form's buttons are `message` actions (below).
+  line, the fields in order, then Save and the `cancel` button ("Never mind") side by side.
+  - `text` (the label form's first field: the food's name, prefilled with what Zestil asked about and the
+    user's to change, D88): a full-width one-line box, `max_length` as the input's limit. It is sent
+    trimmed; blanks count as empty; a prefill longer than `max_length` shows "At most N characters" until
+    it is shortened.
+  - `number`: a text box with `inputMode="decimal"` and its `unit` after it (the unit is also in the box's
+    accessible name, spelled out: "Sodium (milligrams)"), `hint` as helper text, `value` prefilled.
+    Spaces are ignored and one decimal comma reads as a point ("0,02" → 0.02). Digits grouped in threes
+    ("1,330", "1.000") are refused with both readings ("Write 1330 or 1.33") rather than guessed, since a
+    US label groups thousands with a comma; every suggested spelling is one the form accepts ("1.125" →
+    "Write 1125, or 1.1250 for 1.125"; "1,330.5" → "Write 1330.5"). A number the agent prefilled (a
+    correction) counts as sent while the box still shows it, so a prefilled 1.125 is never refused.
+  - `choice` and `checks`: chips with the real radio or checkbox laid invisibly over each chip; a ticked
+    chip shows a check mark (its state isn't told by colour alone, and the mark survives Windows High
+    Contrast, where focus becomes an outline).
+  - An unknown field kind shows its caption as a disabled line and takes no part in Save.
+
+  Save is enabled once every `required` field is filled, no text is longer than its `max_length` once
+  trimmed, every number is a number within its `min`/`max`, and, when the form has both, `sodium_mg` or
+  `salt_g` is filled (`ONE_OF`; the brief asks for one of the two). "Still needed: …" says what is left,
+  and an invalid number or an over-long text says why under its box. Enter never sends the form (Save is
+  a plain button): in a text or number box it moves to the next text or number box, skipping chips (from
+  Name to "One serving weighs"), and on the last one it closes the keyboard; on a chip it ticks the chip;
+  once per press. The form's buttons are `message` actions (below).
 - `notice`: a note or warning behind its icon. Collapsed (the default) it is **only the icon** — bare
   and tone-coloured, not a chip; the padding around the glyph is the tap target, and a negative
   margin keeps the glyph in line with the text above. It is named for screen readers by its `title`
